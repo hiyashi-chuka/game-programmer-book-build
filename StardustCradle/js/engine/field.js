@@ -385,6 +385,8 @@
     G.fx.draw(c, ox, oy);
     // ライティング
     F.drawLighting(c, ox, oy);
+    // 見張りの視界（ライティングの後に描いて暗い場所でも見えるように）
+    for (const e of F.ents) if (e.patrol && !e.dead && e.drawCone) e.drawCone(c, ox, oy);
     if (def.post) def.post(c, ox, oy, G.frame);
     // カットシーンの上下黒帯
     const lbT = G.ev.cutscene ? 1 : 0;
@@ -631,6 +633,7 @@
   F.battleStart = async function (def) {
     const p = F.player;
     const ret = { map: F.map.id, x: p.tx, y: p.ty, dir: p.dir, mech: p.isMech, bgm: G.audio.curId };
+    const tempNpcs = F.ents.filter((e) => e instanceof G.NPC && e.temp && !e.dead);
     const snap = JSON.stringify(G.state);
     for (;;) {
       F.battle = { def, t: 0, wave: 0, lost: false, won: false, retry: false };
@@ -647,6 +650,7 @@
       F.battle.bannerText = def.title || (def.mech ? 'ENGAGE!' : 'BATTLE!');
       F.battle.bannerSub = def.sub || '';
       if (def.onStart) await def.onStart();
+      G.ev.cutscene = false; // カットシーン状態のままだと敵が止まるため解除
       F.battle.active = true;
       await G.tasks.until(() => F.battle.won || F.battle.lost || F.battle.retry);
       if (F.battle.retry) {
@@ -671,7 +675,14 @@
       await G.ev.fadeOut(16);
       F.battle = null;
       if (def.returnTo) F.load(def.returnTo[0], def.returnTo[1], def.returnTo[2], def.returnTo[3] || 'down', { silent: true, keepBgm: false });
-      else F.load(ret.map, ret.x, ret.y, ret.dir, { mech: ret.mech, silent: true, keepBgm: true });
+      else {
+        F.load(ret.map, ret.x, ret.y, ret.dir, { mech: ret.mech, silent: true, keepBgm: true });
+        // E.npc で出したNPCを戻す
+        tempNpcs.forEach((n) => {
+          n.path = [];
+          F.ents.push(n);
+        });
+      }
       if (!def.returnTo) G.audio.bgm(ret.bgm, { restart: true });
       if (!won) {
         const st = G.stats();

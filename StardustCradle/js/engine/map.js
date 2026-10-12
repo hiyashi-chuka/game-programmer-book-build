@@ -61,6 +61,8 @@
       // 本体＋拡張をまとめる
       const exts = G.MAP_EXT[def.id] || [];
       for (const k of LISTS) this[k] = (def[k] || []).concat(...exts.map((e) => e[k] || []));
+      // 調べる/踏むイベントは章ファイルからの追加分を優先（後から追加したものが先）
+      for (const k of ['checks', 'events']) this[k] = [].concat(...exts.map((e) => e[k] || []).reverse(), def[k] || []);
       const defWarps = this.warps,
         defLights = this.lights;
       this.warps = [];

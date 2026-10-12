@@ -174,6 +174,7 @@
   };
   E.npc = function (def) {
     const n = new G.NPC(def);
+    n.temp = true;
     F().add(n);
     return n;
   };

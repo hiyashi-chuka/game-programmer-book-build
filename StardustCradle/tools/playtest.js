@@ -28,7 +28,7 @@ try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = requ
     if (a.k) { await p.keyboard.down(a.k); await p.waitForTimeout(a.ms || 70); await p.keyboard.up(a.k); await p.waitForTimeout(a.gap || 60); }
     if (a.w) await p.waitForTimeout(a.w);
     if (a.adv) for (let i = 0; i < a.adv; i++) { await p.keyboard.down('z'); await p.waitForTimeout(40); await p.keyboard.up('z'); await p.waitForTimeout(a.gap || 120); }
-    if (a.until) { const t0 = Date.now(); while (Date.now() - t0 < (a.max || 15000)) { if (await p.evaluate(a.until)) break; await p.keyboard.down('z'); await p.waitForTimeout(40); await p.keyboard.up('z'); await p.waitForTimeout(150); } }
+    if (a.until) { const t0 = Date.now(); while (Date.now() - t0 < (a.max || 15000)) { if (await p.evaluate(a.until)) break; const busy = await p.evaluate('G.ev.running > 0 || G.ui.blocking()'); if (!busy) { await p.waitForTimeout(150); continue; } await p.keyboard.down('z'); await p.waitForTimeout(40); await p.keyboard.up('z'); await p.waitForTimeout(150); } }
     if (a.js) console.log('js>', JSON.stringify(await p.evaluate(a.js)).slice(0, 2000));
     if (a.shot) await p.screenshot({ path: a.shot });
   }

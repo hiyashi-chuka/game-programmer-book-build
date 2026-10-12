@@ -301,22 +301,25 @@
         c.globalCompositeOperation = 'source-over';
       }
       if (this.type === 'seraph') return this.drawSeraph(c, ox, oy);
-      if (this.patrol && !this.dead) {
-        const [fx, fy] = G.DIRS[this.dir];
-        const a0 = Math.atan2(fy, fx);
-        c.fillStyle = this.spotted ? 'rgba(255,40,70,0.28)' : 'rgba(255,220,90,0.16)';
-        c.beginPath();
-        c.moveTo(this.x + ox, this.y - 6 + oy);
-        c.arc(this.x + ox, this.y - 6 + oy, this.vision, a0 - 0.6, a0 + 0.6);
-        c.closePath();
-        c.fill();
-      }
+
       if (this.telegraph > 0) {
         c.globalCompositeOperation = 'lighter';
         G.glow(c, this.x + ox, this.y - this.bodyH / 2 + oy, 22, 'rgba(255,60,90,0.5)');
         c.globalCompositeOperation = 'source-over';
       }
       super.draw(c, ox, oy);
+    }
+    drawCone(c, ox, oy) {
+      const [fx, fy] = G.DIRS[this.dir];
+      const a0 = Math.atan2(fy, fx);
+      c.globalCompositeOperation = 'lighter';
+      c.fillStyle = this.spotted ? 'rgba(255,40,70,0.30)' : 'rgba(255,220,90,0.16)';
+      c.beginPath();
+      c.moveTo(this.x + ox, this.y - 6 + oy);
+      c.arc(this.x + ox, this.y - 6 + oy, this.vision, a0 - 0.6, a0 + 0.6);
+      c.closePath();
+      c.fill();
+      c.globalCompositeOperation = 'source-over';
     }
     drawSeraph(c, ox, oy) {
       if (!this.img || this.imgPhase !== this.phase) {
