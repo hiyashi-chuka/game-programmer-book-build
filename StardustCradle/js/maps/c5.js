@@ -446,7 +446,7 @@
       { p: 'sign', x: 55, y: 13, text: 'LAB 7', col: '#4ef0ff', msg: '「第七研究棟　関係者以外立入禁止　――コロニー総合研究所」' },
       { p: 'crate', x: 43, y: 22 },
       { p: 'crate', x: 53, y: 23 },
-      { p: 'tank', x: 51, y: 20, text: 'N2', col: '#8a9ab0' },
+      { p: 'tank', x: 53, y: 19, text: 'N2', col: '#8a9ab0' },
     ],
     enemies: [
       { type: 'guard2', x: 27, y: 9, lv: 7, patrol: [[27, 8], [27, 21]], vision: 76, dir: 'down', show: () => !E.flag('c5_alarm') },

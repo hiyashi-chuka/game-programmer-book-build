@@ -1313,7 +1313,7 @@
   async function sceneEisenCoda() {
     E.cut();
     E.stopBgm();
-    await E.warp('arena', 17, 12, 'up', { noEnter: true, noFade: true });
+    await E.warp('arena', 17, 12, 'up', { noEnter: true, noFade: true, silent: true });
     E.hide('player');
     put('c3_eisen', 'eisen', 17, 11, 'down');
     put('c3_aide', 'c3_aide', 17, 13, 'up');

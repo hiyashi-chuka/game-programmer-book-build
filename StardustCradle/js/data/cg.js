@@ -223,43 +223,169 @@
     cache[key] = cv;
     return cv;
   }
+  // なめらかなノイズ（大陸・雲用）
+  function vnoise(x, y, seed) {
+    const xi = Math.floor(x),
+      yi = Math.floor(y),
+      xf = x - xi,
+      yf = y - yi;
+    const sm = (t) => t * t * (3 - 2 * t);
+    const a = G.hash(xi, yi, seed),
+      b = G.hash(xi + 1, yi, seed),
+      c2 = G.hash(xi, yi + 1, seed),
+      d2 = G.hash(xi + 1, yi + 1, seed);
+    const u = sm(xf),
+      v = sm(yf);
+    return a + (b - a) * u + (c2 - a) * v + (a - b - c2 + d2) * u * v;
+  }
+  function fbm(x, y, seed) {
+    return vnoise(x, y, seed) * 0.55 + vnoise(x * 2.1, y * 2.1, seed + 1) * 0.3 + vnoise(x * 4.3, y * 4.3, seed + 2) * 0.15;
+  }
+  // 地球（陰影・雲・大気つき）
+  const earthCache = {};
+  function earth(c, x, y, r) {
+    if (!earthCache[r]) {
+      const cv = G.makeCanvas(r * 2 + 8, r * 2 + 8);
+      const cc = cv.ctx;
+      const img = cc.createImageData(cv.width, cv.height);
+      const d = img.data;
+      const cx = r + 4,
+        cy = r + 4;
+      for (let py = 0; py < cv.height; py++)
+        for (let px = 0; px < cv.width; px++) {
+          const dx = (px - cx) / r,
+            dy = (py - cy) / r;
+          const rr = dx * dx + dy * dy;
+          const i4 = (py * cv.width + px) * 4;
+          if (rr > 1) {
+            // 大気のにじみ
+            const a = Math.max(0, 1 - (Math.sqrt(rr) - 1) * 14);
+            if (a > 0) {
+              d[i4] = 120;
+              d[i4 + 1] = 190;
+              d[i4 + 2] = 255;
+              d[i4 + 3] = a * 150;
+            }
+            continue;
+          }
+          const dz = Math.sqrt(1 - rr);
+          // 球面上の経緯度でテクスチャ
+          const lon = Math.atan2(dx, dz) * 2.2,
+            lat = Math.asin(dy);
+          const land = fbm(lon * 1.6 + 10, lat * 2.2 + 10, 11) > 0.56;
+          let col = land ? [70, 150, 90] : [36, 90, 180];
+          if (Math.abs(lat) > 1.25) col = [230, 240, 250];
+          const cloud = fbm(lon * 3 + 30, lat * 7 + 30, 21) > 0.62;
+          if (cloud) col = [235, 240, 250];
+          // 光源は右上
+          const l = G.clamp(dx * 0.55 - dy * 0.45 + dz * 0.65, -0.2, 1);
+          const k = l < 0.02 ? 0.12 : 0.25 + 0.75 * l;
+          col = col.map((v) => Math.round((v * k) / 8) * 8);
+          if (l < 0.02 && G.hash(px, py, 14) > 0.97 && land) col = [255, 210, 120]; // 夜側の街明かり
+          // 縁の大気
+          const rim = Math.pow(1 - dz, 3);
+          col = col.map((v, i) => v + ([140, 200, 255][i] - v) * rim * 0.7 * Math.max(0.2, l + 0.3));
+          d[i4] = col[0];
+          d[i4 + 1] = col[1];
+          d[i4 + 2] = col[2];
+          d[i4 + 3] = 255;
+        }
+      cc.putImageData(img, 0, 0);
+      earthCache[r] = cv;
+    }
+    c.drawImage(earthCache[r], Math.round(x - r - 4), Math.round(y - r - 4));
+  }
+  const extCache = {};
   function colonyExterior(c, t, x, y, scale, dark) {
-    // 斜めに浮かぶ円筒
+    const key = scale + '_' + dark;
+    if (!extCache[key]) {
+      const L = Math.round(300 * scale),
+        R = Math.round(34 * scale);
+      const pad = Math.round(R * 2.2);
+      const cv = G.makeCanvas(L + pad * 2, R * 2 + pad * 2);
+      const cc = cv.ctx;
+      const ox = pad,
+        oy = pad + R;
+      // ミラー（各窓の外側に開いた細長い鏡）
+      for (const sg of [-1, 1]) {
+        cc.fillStyle = 'rgba(170,200,240,0.22)';
+        cc.beginPath();
+        cc.moveTo(ox + 8, oy + sg * R * 0.85);
+        cc.lineTo(ox + L - 4, oy + sg * R * 0.85);
+        cc.lineTo(ox + L + R * 0.6, oy + sg * R * 2.0);
+        cc.lineTo(ox + R * 0.8, oy + sg * R * 2.0);
+        cc.fill();
+        cc.fillStyle = 'rgba(220,240,255,0.35)';
+        cc.fillRect(ox + R * 0.8, oy + sg * R * 2.0 - (sg > 0 ? 1 : 0), L - R * 0.2, 1);
+      }
+      const img = cc.getImageData(0, 0, cv.width, cv.height);
+      const d = img.data;
+      const set = (px, py, col, a) => {
+        const i4 = (py * cv.width + px) * 4;
+        const k = a === undefined ? 1 : a;
+        d[i4] = d[i4] * (1 - k) + col[0] * k;
+        d[i4 + 1] = d[i4 + 1] * (1 - k) + col[1] * k;
+        d[i4 + 2] = d[i4 + 2] * (1 - k) + col[2] * k;
+        d[i4 + 3] = Math.max(d[i4 + 3], 255 * k);
+      };
+      for (let i = 0; i < L; i++)
+        for (let j = -R; j <= R; j++) {
+          const n = j / R;
+          const phi = Math.asin(G.clamp(n, -1, 1)); // 断面上の角度
+          const nz = Math.cos(phi);
+          const light = G.clamp(0.25 + 0.75 * (nz * 0.7 - n * 0.5), 0.15, 1);
+          const a = (phi / Math.PI + 0.5) * 6 + 0.5; // 0..6
+          const band = Math.floor(a) % 2;
+          const fa = a - Math.floor(a);
+          let col;
+          if (band === 0) {
+            // 窓：宇宙と太陽光の反射
+            col = dark ? [16, 20, 44] : [40, 70, 140];
+            if (!dark && Math.abs(fa - 0.5) < 0.12) col = [120, 170, 235];
+            if (i % 22 === 0) col = [80, 84, 110];
+            if (dark && G.hash(i, j, 3) > 0.985) col = [255, 210, 140];
+          } else {
+            // 陸：街区のテクスチャ
+            const h = G.hash(Math.floor(i / 3), Math.floor(fa * 8), 5);
+            col = h > 0.8 ? [118, 150, 104] : h > 0.5 ? [150, 150, 164] : [128, 128, 146];
+            if (Math.floor(i / 3) % 5 === 0) col = [96, 96, 112];
+          }
+          if (fa < 0.04 || fa > 0.96) col = [70, 72, 92];
+          // リング状の補強材
+          if (i % 50 < 2) col = col.map((v) => v * 0.7);
+          const lc = col.map((v) => Math.min(255, Math.round((v * light) / 8) * 8));
+          set(ox + i, oy + j, lc);
+          // 縁のリムライト
+          if (Math.abs(n) > 0.94 && n < 0) set(ox + i, oy + j, [200, 220, 255], 0.5);
+        }
+      // 端のキャップ（楕円）と宇宙港スピンドル
+      for (let j = -R; j <= R; j++) {
+        const w = Math.round(R * 0.28 * Math.sqrt(1 - (j / R) ** 2));
+        for (let k = -w; k <= 0; k++) {
+          const sh = 0.4 + 0.5 * (1 - Math.abs(j) / R);
+          set(ox + k, oy + j, [Math.round(150 * sh), Math.round(152 * sh), Math.round(175 * sh)]);
+        }
+        const w2 = Math.round(R * 0.28 * Math.sqrt(1 - (j / R) ** 2));
+        for (let k = 0; k <= w2; k++) {
+          const sh = 0.25 + 0.3 * (1 - Math.abs(j) / R);
+          set(ox + L + k, oy + j, [Math.round(120 * sh), Math.round(124 * sh), Math.round(150 * sh)]);
+        }
+      }
+      for (let k = 1; k < R * 0.7; k++)
+        for (let j = -Math.round(R * 0.12); j <= Math.round(R * 0.12); j++) set(ox - Math.round(R * 0.28) - k, oy + j, j < 0 ? [180, 184, 205] : [110, 114, 140]);
+      cc.putImageData(img, 0, 0);
+      extCache[key] = { cv, ox, oy, L };
+    }
+    const E2 = extCache[key];
     c.save();
     c.translate(x, y);
     c.rotate(-0.38);
-    const L = 300 * scale,
-      R = 34 * scale;
-    for (let i = 0; i < L; i++) {
-      const k = i / L;
-      const sh = 0.55 + 0.45 * Math.sin(k * 3.1);
-      for (let j = -R; j <= R; j++) {
-        const n = j / R;
-        const light = Math.max(0, -n * 0.6 + 0.5) * sh;
-        // 縦の帯：陸(灰)と窓(青)
-        const band = Math.floor(((Math.asin(G.clamp(n, -1, 1)) / Math.PI + 0.5) * 6)) % 2;
-        let col = band ? [70, 110, 180] : [150, 150, 170];
-        if (dark && band) col = [20, 30, 60];
-        const v = col.map((q) => Math.min(255, Math.round((q * (0.35 + light)) / 10) * 10));
-        c.fillStyle = `rgb(${v[0]},${v[1]},${v[2]})`;
-        c.fillRect(i - L / 2, j, 1, 1);
-      }
+    c.drawImage(E2.cv, -E2.ox - E2.L / 2, -E2.oy);
+    // 港の灯り
+    if (Math.floor(t / 20) % 2) {
+      c.fillStyle = '#ffd25e';
+      c.fillRect(-E2.L / 2 - 34 * scale * 0.95, -1, 2, 2);
     }
-    // ミラー（3枚）
-    for (const s of [-1, 0, 1]) {
-      c.fillStyle = 'rgba(190,220,255,0.28)';
-      c.beginPath();
-      c.moveTo(-L / 2 + 10, s * R * 0.8);
-      c.lineTo(L / 2 - 10, s * R * 0.8);
-      c.lineTo(L / 2 + 20 * scale, s * R * 1.9);
-      c.lineTo(-L / 2 + 30 * scale, s * R * 1.9);
-      c.fill();
-    }
-    // 端のキャップと港
-    c.fillStyle = '#8a8aa0';
-    c.fillRect(-L / 2 - 6, -R, 6, R * 2);
-    c.fillStyle = '#ffd25e';
-    if (Math.floor(t / 20) % 2) c.fillRect(-L / 2 - 8, -2, 3, 3);
     c.restore();
   }
   CG.space = (c, t) => {
@@ -267,13 +393,7 @@
   };
   CG.colony_out = (c, t) => {
     c.drawImage(starfield(2), 0, 0);
-    // 地球
-    G.ellipse(c, 60, 230, 80, 80, '#1a3a80');
-    G.ellipse(c, 50, 220, 70, 70, '#2a5ab0');
-    G.ellipse(c, 30, 200, 20, 12, '#4a9a5a');
-    G.ellipse(c, 70, 240, 25, 10, '#4a9a5a');
-    c.fillStyle = 'rgba(160,220,255,0.25)';
-    G.ellipse(c, 60, 230, 82, 82, 'rgba(160,220,255,0.15)');
+    earth(c, 60, 236, 86);
     colonyExterior(c, t, W / 2 + 30, H / 2 - 10, 1, false);
   };
   CG.colony_out_dark = (c, t) => {
@@ -506,14 +626,7 @@
         oy = -((cam.y * 0.05) % H);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) c.drawImage(bg, Math.floor(ox + i * W), Math.floor(oy + j * H));
       // 地球（遠く）
-      const ex = 380 - cam.x * 0.08,
-        ey = 210 - cam.y * 0.08;
-      G.ellipse(c, Math.round(ex), Math.round(ey), 70, 70, '#1a3a80');
-      G.ellipse(c, Math.round(ex - 8), Math.round(ey - 8), 62, 62, '#2a5ab0');
-      G.ellipse(c, Math.round(ex - 26), Math.round(ey - 20), 16, 9, '#4a9a5a');
-      G.ellipse(c, Math.round(ex + 12), Math.round(ey + 14), 20, 8, '#4a9a5a');
-      c.fillStyle = 'rgba(255,255,255,0.35)';
-      c.fillRect(Math.round(ex - 40), Math.round(ey - 4), 30, 2);
+      earth(c, 380 - cam.x * 0.08, 210 - cam.y * 0.08, 70);
       // コロニー（中景）
       colonyExterior(c, t, 120 - cam.x * 0.15, 70 - cam.y * 0.15, 0.55, !!G.state.flags.c7_dark);
       // 近景の星（速く流れる）
