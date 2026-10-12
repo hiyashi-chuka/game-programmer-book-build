@@ -1150,7 +1150,8 @@
     await E.say('kanata:think', '（白い部屋……ニコがいた場所。リリィさんも、そこに……？）');
     await E.say('sig', '……その話、とても大事なことかもしれません。');
     E.emote('c3_ruu', '!');
-    await E.say('ruu:surprise', 'うわっ！？　シ、シグ！？　なんで給水塔の上にいんの！？');
+    await E.say('ruu:surprise', 'うわっ！？　シ、シグ！？　いつからそこにいたの！？');
+    await E.say('sig', '……最初から。給水塔の上で、空を見ていました。');
     await E.say('sig', '……「学校」というところに、一度、来てみたかったので。');
     await E.say('kanata:grin', '不法侵入だろ、それ……。');
     await E.move('c3_sig', [[26, 12], [18, 12]]);

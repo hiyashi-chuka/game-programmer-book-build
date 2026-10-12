@@ -687,7 +687,9 @@
     (list || []).forEach((e) => {
       const en = new G.Enemy(e.type, e.x * 16 + 8, e.y * 16 + 14, e);
       en.aggro = e.aggro || 999;
-      if (e.state !== 'idle') en.set(en.ai === 'mech' ? 'engage' : en.ai === 'drone' ? 'idle' : 'chase');
+      // 汎用AIだけ即座に戦闘状態へ（ボス系の独自AIは idle から自分で動き出す）
+      const st = { mech: 'engage', charger: 'chase', brawler: 'chase', soldier: 'chase', phantom: 'float' }[en.ai];
+      if (st && e.state !== 'idle') en.set(st);
       F.add(en);
       if (e.warpIn !== false) G.fx.ring(en.x, en.y - 10, 26, '#ff5fa2');
     });

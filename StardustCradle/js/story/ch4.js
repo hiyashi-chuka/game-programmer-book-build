@@ -266,6 +266,8 @@
     ],
     onEnter: async () => {
       if (!ch4()) return;
+      if (fest()) E.bgm('festival');
+      if (raid()) E.bgm('tension');
       if (ph() === 2 && !E.flag('c4_yui_scene')) {
         E.set('c4_yui_scene');
         await yuiScene();
@@ -668,6 +670,48 @@
   }
 
   // ---------------------------------------------------------------
+  //  文化祭スタンプラリー（任意）：屋台4つ＋出し物4つ
+  // ---------------------------------------------------------------
+  G.mob('c4_satomi', '文化祭実行委員のサトミ', 4111, { girl: true, over: { top: '#2a3460', top2: '#f4f2fb', outfit: 'uniform', bstyle: 'skirt', acc: ['cap'], accCol: '#ff5fa2', style: 'ponytail' } });
+  G.addItem('c4_stampcard', { name: 'スタンプカード', desc: '文化祭スタンプラリーの台紙。屋台4つ（たこ焼き・クレープ・やきそば・かき氷）と出し物4つ（喫茶・お化け屋敷・号外・屋上ライブ）を回ってスタンプを集めよう。' });
+  const STAMPS = [['tako', 'たこ焼き'], ['crepe', 'クレープ'], ['soba', 'やきそば'], ['kori', 'かき氷'], ['cafe', '喫茶'], ['haunt', 'お化け屋敷'], ['news', '号外'], ['live', '屋上ライブ']];
+  const stampOk = (k) => (['cafe', 'haunt', 'news', 'live'].includes(k) ? E.flag('c4_tour_' + k) : E.flag('c4_stamp_' + k));
+  const stampCount = () => STAMPS.filter(([k]) => stampOk(k)).length;
+  async function stamp(k, name) {
+    if (E.flag('c4_stamp_' + k)) return;
+    E.set('c4_stamp_' + k);
+    if (E.has('c4_stampcard')) {
+      E.se('pickup');
+      E.toast(`スタンプ「${name}」をゲット！（${stampCount()}/8）`, '#ffd25e');
+    }
+  }
+  async function stampRally() {
+    if (!E.has('c4_stampcard')) {
+      await E.say('c4_satomi', 'ようこそ、第三中学校文化祭へ！　実行委員のサトミです！　スタンプラリーやってまーす！');
+      await E.say('c4_satomi', '屋台4つと、出し物4つ。ぜんぶ回ってスタンプを集めたら、豪華景品をプレゼント！');
+      await E.give('c4_stampcard', 1);
+      const n = stampCount();
+      if (n) await E.say('c4_satomi', `あ、もう回ったところがあるの？　じゃあ、そのぶんも押しておくね！（${n}/8）`);
+      return;
+    }
+    const n = stampCount();
+    if (E.flag('c4_stamp_prize')) return await E.say('c4_satomi:smile', 'スタンプラリー制覇、おめでとう！　……実は、全部集めたのは今年あなたたちが初めてなの。');
+    if (n < 8) {
+      const left = STAMPS.filter(([k]) => !stampOk(k)).map(([, nm]) => nm).join('・');
+      await E.say('c4_satomi', `いまのスタンプは ${n}/8 個！　あとは……${left}！`);
+      if (!tour()) await E.say('c4_satomi', '出し物は午後から開くよ。屋台なら、もう回れるからね！');
+      return;
+    }
+    E.set('c4_stamp_prize');
+    await E.say('c4_satomi:grin', 'すごい！　8個ぜんぶ！　スタンプラリー完全制覇です！　景品はこちら！');
+    await E.give('sneakers', 1, { wait: true });
+    await E.say('c4_satomi', '体育祭用に取っておいた、エアスニーカー！　……実行委員長には内緒ね。');
+    await E.say('ruu:grin', 'へえ、いいじゃん。これで廊下も全力で走れるね。');
+    await E.say('kanata', 'バルガス先生に怒られるって。');
+    H.reward(150);
+  }
+
+  // ---------------------------------------------------------------
   //  校庭の飾り・屋台・展示
   // ---------------------------------------------------------------
   const yardShop = (goods, title) => async () => await E.shop(goods, title);
@@ -692,10 +736,27 @@
       { p: 'c4_van', x: 2, y: 33, show: raid },
     ],
     npcs: [
-      { id: 'c4_tako', char: 'c4_tako', x: 3, y: 12, dir: 'down', move: 'still', show: fest, talk: async () => { await E.say('c4_tako', '3年B組のたこ焼きだ！　中身は培養タコ、外はカリッ！'); await E.shop(['c4_takoyaki', 'soda'], 'たこ焼き〈タコ・ノヴァ〉'); } },
-      { id: 'c4_crepe', char: 'c4_crepe', x: 14, y: 12, dir: 'down', move: 'still', show: fest, talk: async () => { await E.say('c4_crepe', 'いらっしゃいませ～！　いちごは温室産です！　グリーン・ブロックの！'); await E.shop(['c4_crepe', 'candy'], 'クレープ〈ミルキーウェイ〉'); } },
-      { id: 'c4_soba', char: 'c4_soba', x: 32, y: 22, dir: 'down', move: 'still', show: fest, talk: async () => { await E.say('c4_soba', 'やきそばァ！　ソースは三度がけ！　うまいぞォ！'); await E.shop(['c4_yakisoba', 'onigiri'], 'やきそば〈鉄板番長〉'); } },
-      { id: 'c4_kori', char: 'c4_kori', x: 39, y: 22, dir: 'down', move: 'still', show: fest, talk: async () => { await E.say('c4_kori', 'ネオン味のかき氷、いかが？　舌が光るよ！'); await E.shop(['c4_kakigori', 'energy'], 'かき氷〈ルミナス〉'); } },
+      { id: 'c4_tako', char: 'c4_tako', x: 3, y: 12, dir: 'down', move: 'still', show: fest, talk: async () => {
+        await E.say('c4_tako', '3年B組のたこ焼きだ！　中身は培養タコ、外はカリッ！');
+        await stamp('tako', 'たこ焼き');
+        await E.shop(['c4_takoyaki', 'soda'], 'たこ焼き〈タコ・ノヴァ〉');
+      } },
+      { id: 'c4_satomi', char: 'c4_satomi', x: 19, y: 36, dir: 'right', move: 'still', show: fest, talk: async () => await stampRally() },
+      { id: 'c4_crepe', char: 'c4_crepe', x: 14, y: 12, dir: 'down', move: 'still', show: fest, talk: async () => {
+        await E.say('c4_crepe', 'いらっしゃいませ～！　いちごは温室産です！　グリーン・ブロックの！');
+        await stamp('crepe', 'クレープ');
+        await E.shop(['c4_crepe', 'candy'], 'クレープ〈ミルキーウェイ〉');
+      } },
+      { id: 'c4_soba', char: 'c4_soba', x: 32, y: 22, dir: 'down', move: 'still', show: fest, talk: async () => {
+        await E.say('c4_soba', 'やきそばァ！　ソースは三度がけ！　うまいぞォ！');
+        await stamp('soba', 'やきそば');
+        await E.shop(['c4_yakisoba', 'onigiri'], 'やきそば〈鉄板番長〉');
+      } },
+      { id: 'c4_kori', char: 'c4_kori', x: 39, y: 22, dir: 'down', move: 'still', show: fest, talk: async () => {
+        await E.say('c4_kori', 'ネオン味のかき氷、いかが？　舌が光るよ！');
+        await stamp('kori', 'かき氷');
+        await E.shop(['c4_kakigori', 'energy'], 'かき氷〈ルミナス〉');
+      } },
       { id: 'c4_haru', char: 'sys', mech: 'harukaze', x: 33, y: 18, dir: 'down', move: 'still', show: festDeco, noFace: true, talk: async () => {
         await E.say(null, 'ハルカゼ。父さんのポンコツ号を、ドクとばあちゃんが生まれ変わらせた白い機体。');
         if (fest()) await E.say(null, '見物の子どもたちが、目を輝かせて見上げている。');
@@ -715,7 +776,15 @@
         }
         await E.say('ponta', G.pick(['ローズハウンドの関節、子どもたちに大人気っす！　「ネコみたい」って！', 'オイラ、ずっとここで展示の説明係っす。屋台はみんなに任せたっす！', 'さっき、軍服のおじさんがハルカゼをじーっと見てたっす。……なんだったんすかね。']));
       } },
-      { id: 'c4_mom', char: 'c4_mom', x: 24, y: 28, dir: 'left', move: 'wander', range: 2, show: fest, talk: async () => await E.say('c4_mom', 'うちの子、どこ行ったのかしら……。タロウっていうの。黄色いシャツの……見なかった？') },
+      { id: 'c4_mom', char: 'c4_mom', x: 24, y: 28, dir: 'left', move: 'wander', range: 2, show: fest, talk: async () => {
+        if (!E.flag('c4_kid_found')) return await E.say('c4_mom', 'うちの子、どこ行ったのかしら……。タロウっていうの。黄色いシャツの……見なかった？');
+        if (E.flag('c4_mom_thanks')) return await E.say('c4_mom:smile', 'タロウったら、ロボットの前から動かないのよ。……将来はパイロットになるんですって。');
+        E.set('c4_mom_thanks');
+        await E.say('c4_mom:smile', 'あなたたちね、タロウを見つけてくれたの！　本当にありがとう……！');
+        await E.say('c4_mom', 'これ、よかったら。さっきクレープ屋さんで買ったの。白い髪のお嬢ちゃんと分けてね。');
+        E.give('c4_crepe', 2);
+        await E.say('niko:grin', 'くれーぷ……！　ニコ、まいご、さがすの、とくい。また、さがす。');
+      } },
       { id: 'c4_kid', char: 'c4_kid', x: 40, y: 30, dir: 'down', move: 'still', show: fest, talk: async () => {
         if (E.flag('c4_kid_found')) return await E.say('c4_kid:smile', 'ママのとこ、もどるね！　ロボット、かっこよかった！');
         await E.say('c4_kid:cry', 'うぇぇ……ママぁ……。ウサギさん見てたら、いなくなっちゃった……。');
@@ -803,7 +872,14 @@
   // 職員室：文化祭中、先生は喫茶店に出張中
   G.addToMap('staffroom', {
     onEnter: async () => {
-      if (fest()) E.remove('w2_vargas');
+      if (fest()) {
+        E.bgm('festival');
+        E.remove('w2_vargas');
+      }
+      if (raid()) {
+        E.bgm('tension');
+        E.remove('w2_vargas');
+      }
     },
   });
   // 屋上：ライブ
@@ -823,6 +899,7 @@
         if (tour() && !E.flag('c4_tour_live')) await liveScene();
       }
       if (raid()) {
+        E.bgm('tension');
         for (const e of G.field.ents.slice()) if (e.id && /^w2_/.test(e.id)) E.remove(e.id);
         if (E.flag('c4_raid_go') && !E.flag('c4_r3')) await rescue3();
       }

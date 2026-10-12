@@ -355,6 +355,8 @@
       { x: 9, y: 19, w: 2, show: () => !E.flag('c8_m1_sw'), text: '分厚いシャッターが下りている。「GATE-B2：LOCKED」……近くに制御端末があるはずだ。' },
       { x: 17, y: 16, run: () => C8.m1Switch() },
       { x: 52, y: 21, w: 3, show: () => !E.flag('c8_door_open'), text: 'マザーの紋章が刻まれた大扉。赤い光が、脈打つように明滅している。' },
+      { x: 7, y: 11, run: () => C8.readLog(1) },
+      { x: 40, y: 3, run: () => C8.readLog(2) },
     ],
     events: [
       { x: 9, y: 12, w: 2, h: 1, once: 'c8_m1_echo', cond: is8, run: () => C8.echoScene() },
@@ -382,6 +384,27 @@
       E.objective('施設の奥へ進む（北の通路）');
     },
   });
+
+  // ヘルミナの研究日誌（任意で読める）
+  C8.LOGS = {
+    1: ['研究日誌　S.C.0074.11', '病院船〈ゆりかご〉の小児病棟に、ミアの席がとれた。戦争が終わるまで、あの子は安全な場所にいられる。', '……毎晩の通信で、ミアは星の絵を見せてくれる。「ママの研究してる星、これ？」と。'],
+    2: ['研究日誌　S.C.0075.02', '病院船〈ゆりかご〉が撃たれた。誤射だった、と軍は言った。', '誤射。誤射。誤射。……あの子の最後の絵は、まだ通信ログに残っている。'],
+    3: ['研究日誌　S.C.0079.06', 'スターシードの向こうに、病院船が撃たれなかった世界を観測した。', 'ミアが、8歳の誕生日のケーキを吹き消していた。……となりで笑っている私は、私の知らない顔をしていた。'],
+    4: ['研究日誌　S.C.0084.12', 'ECHO-07が逃げた。……ミアと、同じくらいの背丈だった。', '追うべきなのに、少しだけ、ほっとしている自分がいる。……私は、いったい何をしているのだろう。'],
+  };
+  C8.readLog = async function (k) {
+    const L = C8.LOGS[k];
+    await E.say(null, '古いサーバー端末に、個人用の記録が残っている。');
+    await E.say('sys', L[1], { name: L[0] });
+    await E.say('sys', L[2], { name: L[0] });
+    if (!E.flag('c8_log' + k)) {
+      E.set('c8_log' + k);
+      const n = [1, 2, 3, 4].filter((i) => E.flag('c8_log' + i)).length;
+      E.toast('ヘルミナの研究日誌 ' + n + '/4', G.UI.line2);
+      if (k === 2) await E.say('ruu:sad', '……娘、いたんだ。あの人。');
+      if (n === 4) await E.say('niko:sad', '……ヘルミナも、ずっと、ひとりだった。');
+    }
+  };
 
   C8.m1Switch = async function () {
     if (E.flag('c8_m1_sw')) return E.say(null, 'シャッターの制御端末。「GATE-B2：OPEN」');
@@ -526,6 +549,8 @@
       { x: 40, y: 4, run: () => C8.m2Switch('b') },
       { x: 20, y: 11, w: 4, show: () => !E.flag('c8_m2_bar'), text: 'レーザー障壁だ。左右の区画の制御スイッチで止められそうだ。' },
       { x: 19, y: 26, w: 6, run: () => C8.console() },
+      { x: 8, y: 26, w: 2, run: () => C8.readLog(3) },
+      { x: 34, y: 26, w: 2, run: () => C8.readLog(4) },
     ],
     events: [
       { x: 20, y: 15, w: 4, h: 1, once: 'c8_m2_boss', cond: is8, run: () => C8.helios() },
@@ -753,6 +778,11 @@
     await E.say('helmina', 'そこでは10年前のあの日、軌道上の病院船は撃たれなかった。……ミアは、8歳の誕生日を迎えたの。');
     await E.say('kanata:surprise', '……ミア？');
     await E.say('helmina:sad', '私の娘よ。あの子は、戦争で死んだ。ベッドの上で、私の手を握ったまま。');
+    if ([1, 2, 3, 4].filter((i) => E.flag('c8_log' + i)).length >= 2) {
+      await E.say('ruu:sad', '……病院船〈ゆりかご〉。施設のサーバーに、あんたの日誌が残ってた。');
+      await E.say('helmina:surprise', '……読んだのね。');
+      await E.say('helmina:sad', 'なら、わかるでしょう。あの子の時間は、7歳で止まったまま。……私は、それを動かしたいだけなの。');
+    }
     E.cgOff();
     await E.say('helmina', 'ゼロ・リライトは、世界を「戦争がなかった世界」に書き換える。……あの子が、生きている世界に。');
     await E.say('ruu:angry', 'でも、それって……この世界は、どうなんのさ。');

@@ -20,6 +20,7 @@
     E.set('w_evac');
     E.set('c8_calm');
     E.set('c8_core_intro');
+    E.set('c8_port_open');
     E.party(['ruu', 'niko']);
     G.state.mech.id = 'harukaze2';
     G.state.objective = '';
@@ -105,8 +106,9 @@
     E.unset('w_evac');
     E.time('morning');
     E.bgm('ending', { restart: true });
-    await E.cg('dawn', '――ミラーが、開いていく。');
-    E.fadeIn(10);
+    await E.cg('dawn', '', { wait: false });
+    await E.fadeIn(50);
+    await E.cgCaption('――ミラーが、開いていく。');
     await E.cgCaption('長い長い夜のあとで、クレイドル7に、朝が来た。');
     await E.cgCaption('街じゅうの窓が開いて、人々が空を見上げる。……ニセモノの、でも、いつもの空を。');
     await E.fadeOut(24);
@@ -175,8 +177,17 @@
   // =============================================================
   C9.breakfast = async function () {
     E.time('morning');
-    await E.warp('hoshikuzu', 6, 7, 'up');
+    await E.warp('hoshikuzu', 7, 7, 'up');
     E.cut();
+    const seat = (id, x) => {
+      const f = E.get(id);
+      if (!f) return;
+      E.teleport(id, x, 6, 'up');
+      f.pinned = true;
+    };
+    E.teleport('player', 7, 6, 'up');
+    seat('f_ruu', 5);
+    seat('f_niko', 6);
     await E.say(null, '星屑亭。朝の光が、のれんごしに差しこんでいる。');
     await E.say('tome', 'ほれ、できたよ。星屑ラーメン、朝の特盛りだ。');
     await E.say('niko:smile', 'ラーメン！　……ずるずる……おいしい！　……ニコ、いきてる！');
@@ -229,6 +240,7 @@
     E.time('day');
     E.cut(false);
     E.reload();
+    E.teleport('player', 7, 8, 'down');
     C9.updateObjective();
     E.toast('ジン・アイゼン・ユイ・バルガス先生・キョウスケ・ギル……町のみんなに会いに行こう', G.UI.line2);
   };
@@ -365,7 +377,7 @@
     await E.warp('tome_room', 5, 6, 'down', { noEnter: true });
     E.cut();
     E.bgm('home');
-    await E.notice('― CLEAR ―\n「星屑のクレイドル」の物語は、ここでおしまい。\nクリアおめでとう！\n\nでも、クレイドル7の毎日は、まだまだ続いていく。\nジャンク・デュエルのランク戦、町の人の依頼、星屑メモリー集め……\nこのまま自由に遊べます。', { col: G.UI.gold });
+    await E.notice('― CLEAR ―\n「星屑のクレイドル」の物語は、ここでおしまい。\nクリアおめでとう！\n\nでも、クレイドル7の毎日は、まだまだ続いていく。\nランク戦、町の人の依頼、星屑メモリー集め……\nこのまま自由に遊べます。', { col: G.UI.gold });
     const r = await E.ask(null, 'クリアデータをセーブしますか？', ['セーブする', 'しない'], { cancel: 1 });
     if (r === 0) {
       await new Promise((res) => {

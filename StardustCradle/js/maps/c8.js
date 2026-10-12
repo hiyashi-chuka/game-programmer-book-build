@@ -393,7 +393,7 @@
     items: [
       { x: 18, y: 20, item: 'melonpan', n: 2, id: 'c8m1_i1' },
       { x: 39, y: 11, item: 'energy', n: 2, id: 'c8m1_i2' },
-      { x: 58, y: 3, item: 'memory', id: 'c8m1_mem' },
+      { x: 58, y: 3, item: 'chip', n: 2, id: 'c8m1_chip' },
     ],
   });
 
