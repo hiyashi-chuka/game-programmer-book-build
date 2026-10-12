@@ -20,9 +20,18 @@ try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = requ
   const result = await p.evaluate(async ({ a, b, pick }) => {
     const UI = G.ui, E = G.ev, F = G.field;
     // 自動進行のパッチ
-    UI.say = async (w, t, o) => (o && o.keep ? { kept: true } : undefined);
+    let sc = 0;
+    UI.say = async (w, t, o) => {
+      if (++sc % 50 === 0) await new Promise((r) => setTimeout(r, 0));
+      return o && o.keep ? { kept: true } : undefined;
+    };
     UI.pop = () => {};
-    UI.choice = async (opts) => Math.min(pick, opts.length - 1);
+    let cc = 0;
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    UI.choice = async (opts) => {
+      await tick();
+      return (pick + cc++) % opts.length; // 同じ質問が繰り返されても抜けられるよう順に変える
+    };
     UI.notice = async () => {};
     UI.shop = async () => {};
     UI.upgrade = async () => {};
@@ -61,6 +70,7 @@ try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = requ
         const npcs = F.ents.filter((e) => e instanceof G.NPC && e.talk);
         for (const n of npcs) {
           const snap = JSON.stringify(G.state);
+          cc = 0;
           try {
             if (F.map.id !== id) F.load(id, 5, 5, 'down', { silent: true, keepBgm: true });
             await Promise.race([n.talk(n), new Promise((r) => setTimeout(r, 1500))]);
