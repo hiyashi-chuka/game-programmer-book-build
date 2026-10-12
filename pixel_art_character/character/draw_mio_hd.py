@@ -11,6 +11,7 @@
 """
 import math
 import os
+import sys
 
 import numpy as np
 from PIL import Image
@@ -21,8 +22,14 @@ from draw_mio import MAT, FACE_PAL, ACC, hx, mix, ramp, RIM, BG_TOP, BG_BOTTOM
 v3, nrm = B.v3, B.nrm
 
 # 髪の色：v8 より基本色を少し濃くして、天使の輪（明るい帯）との差を出す（ミルクティー色）
-HAIR_HD = dict(line="#69402f", s2="#a8705a", s1="#c99378", base="#e0b392", lt="#f3d3b4", hi="#fff6e8")
+HAIR_HD = dict(line="#633a2c", s2="#a26a55", s1="#c38c71", base="#dcab89", lt="#f1cfae", hi="#fff6e8")
 MAT["hair"].update({k: hx(v) for k, v in HAIR_HD.items()})
+# カーディガンは肌と分かれるよう少しキャメル寄り、靴は真っ黒でなくこげ茶（全体の暖色と調和）
+MAT["cardigan"].update({k: hx(v) for k, v in dict(line="#80684f", s2="#b39570", s1="#d6bf98", base="#f0e0c0",
+                                                    hi="#faf1de").items()})
+MAT["tee"].update({k: hx(v) for k, v in dict(line="#a2928e", s2="#cfc6cc", s1="#e8e3ea").items()})  # 襟の線を暖かい灰に
+MAT["shoes"].update({k: hx(v) for k, v in dict(line="#24161a", s1="#3a2626", base="#4e322e", lt="#7a5048",
+                                                 hi="#b08a7c").items()})
 
 RES = 4                       # 解像度の倍率（v8 の 96×176 → 384×704）
 W, H = 96 * RES, 176 * RES
@@ -147,7 +154,7 @@ def face_prims_hd(P):
     out = [
         E((0, 17.5, -1.0), (13.9, 13.3, 13.3), "cranium"),
         E((0, 10.2, 2.6), (12.6, 7.3, 9.8), "cheek"),
-        E((0, 3.9 + CHIN_UP, 5.5), (4.7, 2.7, 3.0), "chin"),
+        E((0, 3.9 + CHIN_UP, 5.5), (3.7, 2.7, 3.0), "chin"),      # 顎先は細めの丸（幅広だと平らな盾形に見えた）
     ]
     for s in (-1, 1):
         out.append(E((s * 6.9, 7.6, 6.0), (4.8 * CHEEK_PUFF, 3.9 * CHEEK_PUFF, 4.4), "cheek_puff"))   # 頬のふくらみ
@@ -293,6 +300,7 @@ def make_pose(bob=0.0):
     """v8 のポーズから、ストラップを握る手を首元からみぞおちの高さへ下げる（docs/15：紐を持つ手は鎖骨の下〜みぞおち）。"""
     P = _make_pose_v8(bob)
     up = v3(0, bob, 0)
+    P["head"] = P["head"] + v3(0, HEAD_DOWN, 0)    # 首を短く（頭が大きい 4.5 頭身では首が長く見えた）
     P["elbow_R"], P["wrist_R"] = B.ik(P["shoulder_R"], v3(1.6, 97.0, 11.8) + up, B.BONES["upper_arm"],
                                       B.BONES["forearm"], v3(0.8, -0.6, -0.6))
     return P
@@ -306,11 +314,26 @@ def render(bob=0.0, eyes="open", face_details=True):
 def render_base(bob=0.0):
     """顔を描く前までの描画（まばたきの差分は finish だけ描き直せばよい）。"""
     B.make_pose = make_pose
+    B.HEAD_SCALE, B.BODY_SCALE = HD_HEAD_SCALE, HD_BODY_SCALE
+    B.HEAD_TILT = math.radians(HD_HEAD_TILT)   # 首かしげは控えめに（左右の目の高さの差が「歪み」に見えないように）   # 4.5 頭身（v8 の 5.0 から下げる：docs/15 15-12）
     B.TEE_NECK, B.CARD_NECK = (4.3, 3.0, 6.5), (5.0, 4.0, 7.5)   # 襟ぐりを狭く：首元の肌が横に広がって見えないように
     groups, P = B.build_scene(bob)
     for i, g in enumerate(groups):
         if g.name in ("leg_w", "leg_f"):
             g.inflate = LEG_SLIM         # 可愛い系は手足を細く（docs/15）
+            g.prims = [p for p in g.prims if "malleolus" not in p.tag]   # くるぶしの出っ張りは靴下からのぞくので外す
+        if g.name in ("socks_w", "socks_f"):
+            # 靴下も脚に沿わせる（太い筒に見えないように）。くるぶしの膨らみは入れない（風船のように見えた）
+            sd = "L" if g.name == "socks_w" else "R"
+            kn, an = P["knee_" + sd], P["ankle_" + sd]
+            ankle_cover = B.RoundCone(kn + (an - kn) * 0.55, an + v3(0, -1.2, 0), 2.6, 2.4, "sock_ankle")
+            ng = B.Group(g.name, g.mat, [p for p in g.prims if "malleolus" not in p.tag] + [ankle_cover], k=g.k,
+                         inflate=SOCK_SLIM, cut=g.cut)
+            ng.set_xf(np.zeros(3), B.BODY_SCALE, np.zeros(3))
+            groups[i] = ng
+        if g.name == "torso_skin":
+            # 首を細く（顎と同じ幅の円柱に見えた）
+            g.prims = [B.RoundCone(p.a, p.b, NECK_R[0], NECK_R[1], p.tag) if p.tag == "neck" else p for p in g.prims]
         if g.name == "tee":
             # T シャツで肩の上（僧帽筋）と鎖骨も覆う：襟元の左右に肌が「翼」のように見えるのを防ぐ
             extra = [B.Ellipsoid(p.c, p.r + 0.7, p.R, p.tag) for p in B.torso_prims(bob) if p.tag == "trapezius"]
@@ -321,9 +344,11 @@ def render_base(bob=0.0):
             ng.set_xf(np.zeros(3), B.BODY_SCALE, np.zeros(3))
             groups[i] = ng
         if g.name == "face" and FACE_HD:
-            ng = B.Group("face", g.mat, face_prims_hd(P), k=g.k)
+            ng = B.Group("face", g.mat, face_prims_hd(P), k=FACE_K)   # つなぎ目を大きく：頬〜顎の角を消す
             ng.set_xf(P["head"], B.HEAD_SCALE, P["head"] * B.BODY_SCALE)
             groups[i] = ng
+    rebuild_bag_strap(groups, bob)
+    rebuild_shoes(groups)
     if HAIR_HD_SHAPE:
         ih, ib = [k for k, g in enumerate(groups) if g.name == "hair"][0], [k for k, g in enumerate(groups) if g.name == "bangs"][0]
         groups[ih], groups[ib] = build_hair_hd(P, groups[ih], groups[ib])
@@ -331,12 +356,19 @@ def render_base(bob=0.0):
         for g in groups:
             if g.name in ("hair", "bangs"):
                 sharpen_tips(g)
-    Pw, hit, Rv = raymarch(groups)
+    if HAIR_2D:
+        # 髪は 3D から外して、あとで 2D の「束」として描く（hair2d）。名前と番号は残すため末尾へ移す
+        hair_gs = [g for g in groups if g.name in ("hair", "bangs")]
+        groups = [g for g in groups if g.name not in ("hair", "bangs")] + hair_gs
+        g3 = groups[:-2]
+    else:
+        g3 = groups
+    Pw, hit, Rv = raymarch(g3)
     names = [g.name for g in groups]
     gi = {n: k for k, n in enumerate(names)}
     idx = np.where(hit)[0]
     Ph = Pw[idx]
-    _, gid = B.scene_d(groups, Ph)
+    _, gid = B.scene_d(g3, Ph)
     N = B.normals(groups, Ph, gid)
     Ph_src = Ph.copy()
     for g in np.unique(gid):
@@ -368,14 +400,14 @@ def render_base(bob=0.0):
         N[mh_all] = nm / np.linalg.norm(nm, axis=1, keepdims=True)
     lam = N @ Lm
     lam -= 0.10 * np.clip((100 - Ph[:, 1]) / 100, 0, 1)
-    for gname, b in (("hair", -0.14), ("bangs", -0.08)):
+    for gname, b in ((("hair", -0.26), ("bangs", -0.2)) if HAIR_UNIFY else (("hair", -0.14), ("bangs", -0.08))):
         lam[gid == gi[gname]] += b
     lv = B.level_of(lam)
-    lit = B.shadow(groups, Ph + N * 0.6, Lm)
+    lit = B.shadow(g3, Ph + N * 0.6, Lm)
     lv[~lit] = np.maximum(lv[~lit], 3)
     deep = (~lit) & (lam < 0.05)
     lv[deep] = 4
-    occ = B.ambient_occlusion(groups, Ph + N * 0.1, N)
+    occ = B.ambient_occlusion(g3, Ph + N * 0.1, N)
     is_hair = np.isin(gid, [gi["hair"], gi["bangs"]])
     th = np.where(is_hair, 4.2, 2.6)
     ao = (occ > th) & ~mface
@@ -387,13 +419,27 @@ def render_base(bob=0.0):
     ql_f = (Ph_src[mface] - P["head"]) @ Rh
     lv[mface] = np.where(~lit[mface] & (ql_f[:, 1] > FACE_SHADOW_Y), 3, 2)
     lv[is_hair] = np.clip(lv[is_hair], 1, 3)
-    mb = gid == gi["bangs"]                       # 前髪：束ごとの丸みの縞を消し、ベタ＋落ち影＋束の下の影だけ
-    lv[mb] = np.where(lit[mb] & (occ[mb] < 4.6), 2, 3)
+    if not HAIR_UNIFY:
+        mb = gid == gi["bangs"]                   # 前髪：束ごとの丸みの縞を消し、ベタ＋落ち影＋束の下の影だけ
+        lv[mb] = np.where(lit[mb] & (occ[mb] < 4.6), 2, 3)
     lv[(lv == 4) & ~deep] = 3
+    # 首：影は顎の下の落ち影だけ（首全体が影色だと平板に見えた）
+    if "torso_skin" in gi:
+        chin_y = B.head_dst(P["head"] + Rh @ v3(0, 3.9 + CHIN_UP - 2.7, 5.5), P)[1]
+        neck = (gid == gi["torso_skin"]) & (Ph[:, 1] > chin_y - 4.2) & (Ph[:, 1] < chin_y + 0.5)
+        lv[neck] = np.where(Ph[neck, 1] > chin_y - 2.0, 3, 2)
     # 手足の肌：アニメ塗りの 2 段（明るい面と、光と反対側の 1 本の影）＋すねの細いツヤ。
     # 細かな凹凸の影（膝・ふくらはぎのまだら）は消す
+    # 服（カーディガン・袖・T シャツ）：形の決まった 2 段（＋深い所だけ 3 段目）。遮蔽のまだらな影は消す
+    cloth = np.isin(gid, [k for k, n in enumerate(names) if n.startswith(("cardigan", "sleeve", "tee"))])
+    lv[cloth] = np.where(lit[cloth] & (lam[cloth] > 0.1), 2, np.where(deep[cloth], 4, 3))
+    lv[cloth & lit & (lam > 0.8)] = 1
+    lv[cloth & (occ > 3.0) & (lv < 3)] = 3      # 脇・腕の下・襟の下など、奥まった所には影（服がベタに見えないように）
+    shoes = np.isin(gid, [gi[n] for n in ("shoe_w", "shoe_f") if n in gi])   # 靴：2 段＋ツヤ（縞を出さない）
+    lv[shoes] = np.where(lit[shoes] & (lam[shoes] > 0.25), 2, 3)
+    lv[shoes & lit & (lam > 0.8)] = 1
     limbs = np.isin(gid, [gi[n] for n in ("leg_w", "leg_f", "arm_L", "arm_R", "hands")])
-    lv[limbs] = np.where(lit[limbs] & (lam[limbs] > 0.12), 2, 3)
+    lv[limbs] = np.where(lit[limbs] & (lam[limbs] > -0.02), 2, 3)   # 影は光と反対側の細い帯だけ（脚がまだらにならないように）
     lv[limbs & lit & (lam > 0.86)] = 1
 
     # 天使の輪
@@ -421,10 +467,10 @@ def render_base(bob=0.0):
     jit = ((st * 7919) % 11) / 10.0 - 0.5
     ring_c = 23.6 + 0.9 * jit
     # 束ごとに「レンズ形」：束の中心で一番太く、束の縁で細くなって途切れる → ギザギザのツヤが並ぶ
-    taper = np.clip(1 - np.abs(sv) ** 2, 0, 1)
+    taper = np.clip(1 - np.abs(sv) ** 4, 0, 1)    # 束の縁だけで細くする（輪が途切れすぎない）
     taper = np.where(su >= 0, taper, 1.0)
     dy = ql[:, 1] - ring_c
-    hh = (1.05 + 0.35 * jit) * taper
+    hh = (1.25 + 0.35 * jit) * taper
     band = is_hair & (st >= 0) & (np.abs(dy) < hh) & (ql[:, 0] < 5.0 + 3.0 * jit) & (ql[:, 2] > -7.0) & lit
     lv[band] = 1
     core = band & (np.abs(dy + 0.15) < hh * 0.5) & (ql[:, 0] < 3.0)
@@ -439,12 +485,14 @@ def render_base(bob=0.0):
         for k in range(5):
             img[idx[m & (lv == k)]] = ramp(mats[g], k)
     for k in range(5):
-        c = ramp(MAT["inner"], min(k, 4))      # 顎の横で暗くなりすぎないよう 1 段明るく
+        # 髪の内側：髪の 1 段暗い色に、ピンクをほんの少し（濃いピンクは顎の下でスカーフ・チョーカーに見えた）
+        c = mix(ramp(MAT["hair"], min(k + 1, 4)), ramp(MAT["inner"], min(k, 4)), 0.2)
         if k >= 3:
             c = mix(c, hx("#9a6ab8"), 0.25)    # 内側の影は紫寄り（寒色で空気感）
         img[idx[inner & (lv == k)]] = c
 
-    B.texture_details(img, idx, Ph_src, gid, names, lv, P, bob)   # カーディガンのリブ・靴下の口ゴムなど
+    pleat_faces(img, idx, Ph_src, gid, gi, lv)
+    texture_hd(img, idx, Ph_src, gid, names, lv, P, bob)   # リブ（裾・袖口・靴下の口）、靴、バッグのフタ
     if HAIR_TEXTURE:
         hair_texture(img, idx, is_hair, lv, lit, su, sv, slat, strand[idx], ql, inner,
                      is_bang=(gid == gi["bangs"]), ring=under_ring)
@@ -470,7 +518,8 @@ def render_base(bob=0.0):
     flat = img.reshape(-1, 4)
     for g in range(len(groups)):
         m = rim & (gid == g)
-        flat[idx[m]] = mix(ramp(mats[g], 3), RIM, 0.45)
+        # 髪のリムライトは弱く（強いと髪が白っぽく光ってゼリーのように見えた）
+        flat[idx[m]] = mix(ramp(mats[g], 3), RIM, 0.15 if groups[g].name in ("hair", "bangs") else 0.45)
 
     vz = np.full(W * H, -1e9)
     vz[idx] = (Ph @ Rv.T)[:, 2]
@@ -479,17 +528,167 @@ def render_base(bob=0.0):
     su_full = np.full(W * H, -1.0)
     su_full[idx] = su
     img = outlines(img, gmap, vz, lvmap, strand.reshape(H, W), mats, groups, su_full.reshape(H, W))
+    finger_lines(img, gmap, groups, gi, Ph, idx, gid)
     return dict(img=img, gmap=gmap, vz=vz, names=names, P=P, Rv=Rv, groups=groups, bob=bob, strand=strand.reshape(H, W))
+
+
+BAG_R = B.rot_z(math.radians(4)) @ B.rot_y(math.radians(-10))
+BAG_C0 = v3(-12.2, 70.4, 8.4)          # v8 より前（z 6.2 → 8.4）：スカートに埋もれないように
+
+
+def rebuild_bag_strap(groups, bob):
+    """バッグを少し前に出し、ストラップを肩の上から掛ける（講評：紐が胸の途中から始まって見えた）。"""
+    BS = B.BODY_SCALE
+    names = [g.name for g in groups]
+    if "bag" not in names or "strap" not in names:
+        return
+    ib, isp = names.index("bag"), names.index("strap")
+    bag_c = BAG_C0 + v3(0, bob, 0)
+    g = B.Group("bag", MAT["bag"], [B.RoundBox(bag_c, (5.2, 4.3, 1.9), 1.3, BAG_R, "bag")], k=0)
+    g.set_xf(np.zeros(3), BS, np.zeros(3))
+    groups[ib] = g
+    cloth = [gg for gg in groups if gg.name in ("cardigan", "tee", "skirt", "bag")]
+    a0, a1 = v3(9.4, 120.8 + bob, 0.0), v3(-8.2, 75.4 + bob, 0.0)
+    sp = []
+    zprev = 8.0
+    for t in np.linspace(0, 1, 13):
+        xy = a0 * (1 - t) + a1 * t
+        z = B.surface_z(cloth, xy[0] * BS, xy[1] * BS)       # 服は縮小済みなので画面の座標で表面を探す
+        z = zprev if z is None else z / BS
+        zprev = z
+        sp.append(v3(xy[0], xy[1], z + 0.8))
+    # 肩の上を越えて背中側へ：最初の点を肩の頂上へ上げ、少し後ろへ
+    sp.insert(0, v3(10.6, 124.2 + bob, -1.6))
+    gs = B.Group("strap", MAT["strap"], [B.RoundCone(a, b, 0.8, 0.8, "strap") for a, b in zip(sp, sp[1:])], k=0.5)
+    gs.set_xf(np.zeros(3), BS, np.zeros(3))
+    groups[isp] = gs
+
+
+def rebuild_shoes(groups):
+    """ローファーを作り直す（講評：レンガのような箱に見えた）。
+    かかと・甲・つま先の 3 つの楕円をなめらかにつなぎ、つま先は低く丸く、甲は足首へ上がる。靴底は薄く。"""
+    names = [g.name for g in groups]
+    for name, heel, toe in B.SHOES:
+        if name not in names:
+            continue
+        fwd = nrm(toe - heel)
+        F = B.frame(fwd, v3(0, 1, 0))
+        side, up = F[:, 0], F[:, 2]
+        Lf = np.linalg.norm(toe - heel)
+        A = lambda x, y, z, heel=heel, side=side, fwd=fwd, up=up: heel + side * x + fwd * z + up * y
+        Rf = np.stack([side, up, fwd], axis=1)
+        prims = [B.Ellipsoid(A(0, 2.7, 2.6), (3.0, 2.7, 2.9), Rf, "shoe_heel"),
+                 B.Ellipsoid(A(0, 2.6, Lf * 0.5), (3.3, 2.5, 4.4), Rf, "shoe_body"),
+                 B.Ellipsoid(A(0, 1.9, Lf - 2.7), (3.1, 1.75, 3.0), Rf, "shoe_toe"),
+                 B.RoundBox(A(0, 0.55, Lf / 2 - 0.1), (3.3, 0.5, Lf / 2 - 0.3), 0.45, Rf, "sole")]
+
+        def shoe_cut(Q, d, heel=heel, up=up, fwd=fwd):
+            rel = Q - heel
+            return np.maximum(d, rel @ up - (5.9 - 0.14 * (rel @ fwd)))   # 足首の口
+
+        g = B.Group(name, MAT["shoes"], prims, k=1.8, cut=shoe_cut)
+        g.set_xf(np.zeros(3), B.BODY_SCALE, np.zeros(3))
+        groups[names.index(name)] = g
+
+
+def finger_lines(img, gmap, groups, gi, Ph, idx, gid):
+    """手の指の区切り：隣のピクセルが別の指（または親指と手のひら）なら細い線。
+    手が角の丸い四角の塊（豆腐）に見えるのを防ぐ（講評より）。"""
+    if "hands" not in gi:
+        return
+    hg = groups[gi["hands"]]
+    m = gid == gi["hands"]
+    if not m.any():
+        return
+    pid = np.full(W * H, -1)
+    pid[idx[m]] = hg.nearest_prim(Ph[m])
+    pid = pid.reshape(H, W)
+    tags = [p.tag for p in hg.prims]
+    is_f = np.array([t in ("finger", "thumb") for t in tags])
+    line = mix(MAT["skin"]["line"], MAT["skin"]["s2"], 0.55)
+    out = img.copy()
+    for dx, dy in ((1, 0), (0, 1)):
+        npid = shift(pid, dx, dy, -1)
+        e = (pid >= 0) & (npid >= 0) & (pid != npid)
+        e &= is_f[np.clip(pid, 0, None)] & is_f[np.clip(npid, 0, None)]   # 指と指の間だけ（手のひらとの境目に線を引くと四角が重なって見えた）
+        out[e] = line
+    img[...] = out
 
 
 def finish(base, eyes="open", face_details=True):
     img = base["img"].copy()
-    gmap, P, Rv = base["gmap"], base["P"], base["Rv"]
+    gmap, P, Rv = base["gmap"].copy(), base["P"], base["Rv"]
+    if HAIR_2D:
+        import hair2d
+        hair2d.draw(img, gmap, base["names"], P, Rv, sys.modules[__name__])
     if face_details:
         draw_face(img, gmap, base["vz"], base["names"], P, Rv, eyes, base["groups"])
         draw_accessories(img, gmap, base["names"], P, Rv, base["bob"])
     grade(img, gmap)
     return img, P, Rv, gmap
+
+
+def pleat_faces(img, idx, Ph, gid, gi, lv):
+    """プリーツの山と谷：折り目の両側の面を明・暗で交互に塗る（同じ明るさの縞では立体に見えなかった）。"""
+    if "skirt" not in gi:
+        return
+    m = gid == gi["skirt"]
+    pel_c = v3(-0.5, 79.6, 0)
+    q = (Ph[m] - pel_c) @ B.rot_z(B.PEL_TILT)
+    ang = np.arctan2(q[:, 2], q[:, 0])
+    f = (ang * 24 / (2 * np.pi)) % 1.0
+    dark = f > 0.5                                   # 光と反対を向く面
+    out = img.reshape(-1, 4)
+    sel = np.where(m)[0]
+    for j, i in enumerate(sel):
+        k = int(min(max(lv[i] + (1 if dark[j] else 0), 0), 4))
+        out[idx[i]] = ramp(MAT["skirt"], k)
+    crease = np.abs(f - 0.5) < 0.04                 # 谷の折り目に濃い線
+    for j in np.where(crease)[0]:
+        out[idx[sel[j]]] = MAT["skirt"]["s2"]
+
+
+def texture_hd(img, idx, Ph, gid, names, lv, P, bob=0.0):
+    """布の細部（HD 用）：カーディガンの裾と袖口のリブ（2px 間隔の縦の筋）、靴下の口ゴム、靴底。
+    v8 のケーブル編みの模様は高解像度ではまだらな汚れに見えたので描かない。"""
+    gi = {n: k for k, n in enumerate(names)}
+    out = img.reshape(-1, 4)
+
+    def paint(mask, shift, mat):
+        for i in np.where(mask)[0]:
+            out[idx[i]] = ramp(MAT[mat], int(min(max(lv[i] + shift, 0), 4)))
+
+    stripe = lambda v: (np.floor(v * RES / 2.0) % 2 == 0)
+    if "cardigan" in gi:
+        m = gid == gi["cardigan"]
+        paint(m & (Ph[:, 1] < 82.6) & stripe(Ph[:, 0]), 1, "cardigan")
+    for side in ("L", "R"):
+        k = "sleeve_fore_" + side
+        if k in gi:
+            el, wr = P["elbow_" + side], P["wrist_" + side]
+            u = nrm(wr - el)
+            sd = (Ph - el) @ u
+            m = (gid == gi[k]) & (sd > np.linalg.norm(wr - el) - 1.8)
+            paint(m & stripe(Ph @ np.cross(u, v3(0, 0, 1))), 1, "cardigan")
+    for k, top in (("socks_w", 27.6), ("socks_f", 29.0)):
+        if k in gi:
+            m = gid == gi[k]
+            paint(m & (Ph[:, 1] > top - 1.4), 1, "socks")
+            paint(m & (Ph[:, 1] > top - 3.6) & (Ph[:, 1] <= top - 1.4) & stripe(Ph[:, 0] * 1.4), 1, "socks")
+    for k, heel, toe in B.SHOES:
+        if k in gi:
+            m = gid == gi[k]
+            paint(m & (Ph[:, 1] < 1.5), 1, "shoes")                       # 靴底
+            fwd = nrm(toe - heel)
+            zz = (Ph - heel) @ fwd / np.linalg.norm(toe - heel)          # かかと 0 〜 つま先 1
+            paint(m & (Ph[:, 1] > 2.9) & (np.abs(zz - 0.58) < 0.022), 2, "shoes")  # 甲の帯（サドル）の縫い目：線 1 本
+    if "bag" in gi:
+        m = gid == gi["bag"]
+        q = (Ph - BAG_C0 - v3(0, bob, 0)) @ BAG_R
+        edge = 0.2 + 1.5 * (q[:, 0] / 5.2) ** 2                          # フタの下端：中央が一番下がる丸い形
+        flap = m & (q[:, 2] > 0.5) & (q[:, 1] > edge)
+        paint(flap, -1, "bag")
+        paint(m & (q[:, 2] > 0.5) & (np.abs(q[:, 1] - edge) < 0.28), 2, "bag")     # フタの縁の線
 
 
 def grade(img, gmap):
@@ -503,12 +702,25 @@ def grade(img, gmap):
     m = gmap >= 0
     rgb = img[..., :3].astype(float)
     soft = rgb * (1 - a) + (rgb * tint / 255.0) * a          # 乗算を弱く
+    # グラデーションマップ（プロの仕上げ）：明るさに応じて暗部は青紫、明部は暖色を薄く重ね、全体の色をまとめる
+    Y = (0.299 * soft[..., 0] + 0.587 * soft[..., 1] + 0.114 * soft[..., 2])[..., None] / 255.0
+    gmapc = np.array([62, 58, 110]) * (1 - Y) + np.array([255, 238, 222]) * Y
+    soft = soft * (1 - GRADMAP) + gmapc * GRADMAP
     img[..., :3] = np.where(m[..., None], np.clip(soft, 0, 255), rgb).astype(np.uint8)
 
 
+GRADMAP = 0.12              # グラデーションマップの強さ
 FACE_SHADOW_Y = 16.0        # 顔に落ち影を入れるのはこの高さ（頭の座標）より上＝額だけ
+SOCK_SLIM = -0.35
+NECK_R = (3.5, 3.2)         # 首の太さ（v8 は 4.1, 3.7）
+FACE_K = 4.6                # 顔の部品のつなぎ目の幅（v8 は 3.0）
 LEG_SLIM = -0.45            # 脚を細くする量（距離関数を内側へずらす）
-HAIR_SPHERE = 0.6           # 髪の法線を球の法線へ寄せる割合
+HEAD_DOWN = -1.4             # 頭を下げる量（首を短く）
+HD_HEAD_TILT = -3.5          # 首かしげ（度）。v8 は -6
+HD_HEAD_SCALE, HD_BODY_SCALE = 1.14, 0.88   # 頭 1.14 倍・首から下 0.88 倍 → 約 4.5 頭身
+HAIR_UNIFY = True           # 髪の一体感：前髪・横髪・後ろ髪を同じ塗りと弱い境目でひとまとまりに（docs/15 15-12）
+HAIR_SPHERE = 0.7           # 髪の法線を球の法線へ寄せる割合
+HAIR_2D = True              # 髪を 2D の束（筆の形）として設計して描く（docs/15 15-13）
 FACE_HD = True              # HD 用の可愛い輪郭（頬のふくらみ・小さく丸い顎）
 HAIR_HD_SHAPE = True        # HD 用の髪型（平たい毛束・内巻きのボブ）
 HAIR_SHARP = True           # 毛先を尖らせる
@@ -534,11 +746,11 @@ def hair_texture(img, idx, is_hair, lv, lit, su, sv, slat, st, ql, inner, is_ban
         cur[mask] = cur[mask] * (1 - a) + c * a
 
     # 束の影（画面右の縁）。根元は土台に溶けるので u > 0.15 から
-    side_sh = on & (sv > 0.45 + 0.2 * hsh) & (su > 0.15) & (lv <= 2)
-    blend(side_sh, col["s1"], 0.75)
+    side_sh = on & (sv > 0.45 + 0.2 * hsh) & (su > 0.3) & (lv <= 2)
+    blend(side_sh, col["s1"], 0.4 if HAIR_UNIFY else 0.75)
     # 束の光（画面左の縁を少し明るく）
     side_lt = on & (sv < -0.55) & (su > 0.2) & (su < 0.8) & lit & (lv == 2)
-    blend(side_lt, col["lt"], 0.45)
+    blend(side_lt, col["lt"], 0.25 if HAIR_UNIFY else 0.45)
     # 毛流れの線：束ごとに 1 本（太い束は 2 本）。細い線＝今の色と影色の中間
     for k, off in enumerate((-0.25, 0.3)):
         v0 = off + 0.25 * (hsh - 0.5)
@@ -546,7 +758,7 @@ def hair_texture(img, idx, is_hair, lv, lit, su, sv, slat, st, ql, inner, is_ban
             & (np.abs(sv) < 0.85)
         if k == 1:
             line &= hsh > 0.45
-        blend(line, col["s2"], 0.45)
+        blend(line, col["s2"], 0.3 if HAIR_UNIFY else 0.45)
     # 前髪の毛先の透け感：顔にかかる先の方に肌の色を混ぜる
     skin = np.array(MAT["skin"]["base"][:3], float)
     bt = on & is_bang & (su > 0.55)
@@ -573,6 +785,8 @@ def outlines(img, gmap, vz, lvmap, strand, mats, groups, su_map=None):
     out = img.copy()
     hair_ids = [i for i, g in enumerate(groups) if g.name in ("hair", "bangs")]
     face_id = [i for i, g in enumerate(groups) if g.name == "face"][0]
+    card_ids = [i for i, g in enumerate(groups) if g.name.startswith(("cardigan", "sleeve"))]
+    skirt_ids = [i for i, g in enumerate(groups) if g.name == "skirt"]
     here = gmap >= 0
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         ng = shift(gmap, dx, dy, -1)
@@ -580,18 +794,25 @@ def outlines(img, gmap, vz, lvmap, strand, mats, groups, su_map=None):
         ns = shift(strand, dx, dy, -1)
         edge_empty = here & (ng < 0)
         diff = here & (ng >= 0) & (ng != gmap) & (vz > nz)
-        jt = np.where(np.isin(gmap, hair_ids), HAIR_JUMP, 3.0)
+        # カーディガンの身頃・上腕・前腕どうしの境目は、深さが近ければ線を引かない（袖を横切る継ぎ目に見えた）
+        same_cloth = np.isin(gmap, card_ids) & np.isin(ng, card_ids) & (vz - nz < 2.5)
+        diff &= ~same_cloth
+        if HAIR_UNIFY:
+            # 前髪・横髪（bangs）と後ろ髪（hair）の境目は濃い線にしない：髪どうしは「束の重なり」の弱い線だけ
+            both_hair = np.isin(gmap, hair_ids) & np.isin(ng, hair_ids)
+            diff &= ~both_hair
+        jt = np.where(np.isin(gmap, hair_ids), HAIR_JUMP, np.where(np.isin(gmap, skirt_ids), 7.0, 3.0))
         jump = here & (ng == gmap) & (vz - nz > jt)
         groove = here & (strand >= 0) & (ns >= 0) & (ns != strand) & (vz < nz + 0.5) & ~jump
         # 毛束が別の束の手前に重なる所：細く明るめの線（内側の線は外周より弱く。束の形がつながって見える）
-        overlap = here & (strand >= 0) & (ns >= 0) & (ns != strand) & (vz - nz > 1.2) & ~jump & (ng == gmap)
+        overlap = here & (strand >= 0) & (ns >= 0) & (ns != strand) & (vz - nz > (2.6 if HAIR_UNIFY else 1.2)) & ~jump & np.isin(ng, hair_ids)
         for y, x in zip(*np.where(overlap)):
             m = mats[gmap[y, x]]
             out[y, x] = mix(m["line"], m["s2"], 0.6)
         for y, x in zip(*np.where(groove)):
             m = mats[gmap[y, x]]
             # 束の分かれ目は「線」ではなく浅い溝：今の色と影色の中間（強すぎると髪が細い糸の束に見える）
-            out[y, x] = mix(tuple(img[y, x]), m.get("s2", m["s1"]), 0.55)
+            out[y, x] = mix(tuple(img[y, x]), m.get("s2", m["s1"]), 0.25 if HAIR_UNIFY else 0.55)
         for y, x in zip(*np.where(edge_empty | diff | jump)):
             m = mats[gmap[y, x]]
             lit = lvmap[y, x] <= 2
@@ -602,9 +823,12 @@ def outlines(img, gmap, vz, lvmap, strand, mats, groups, su_map=None):
                 dark = mix(m["line"], m["s2"], 0.35 + 0.5 * a)
                 soft = mix(m["line"], m["s1"], 0.5 + 0.4 * a)
             if gmap[y, x] == face_id:      # 顔の輪郭は細く柔らかい色に（濃い輪郭は頬をこけて見せる）
-                dark, soft = mix(m["line"], m["s2"], 0.45), mix(m["line"], m["s2"], 0.8)
+                dark, soft = mix(m["line"], m["s2"], 0.3), mix(m["line"], m["s2"], 0.6)
             if edge_empty[y, x]:
-                out[y, x] = soft if lit else dark
+                if gmap[y, x] in hair_ids and (su_map is None or su_map[y, x] <= 0.82):
+                    out[y, x] = mix(m["line"], m["s2"], 0.25) if lit else dark   # 髪の外形ははっきり（背景に溶けない）
+                else:
+                    out[y, x] = soft if lit else dark
             elif jump[y, x]:
                 out[y, x] = m.get("s2", m["s1"]) if lit else soft
             else:
@@ -710,6 +934,8 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes, groups):
     cx, cy, _ = project(B.head_dst(P["head"] + Rh @ v3(0, 13, 8), P), Rv)
     r = int(20 * RES)
     box = (max(int(cx) - r, 0), max(int(cy) - r, 0), min(int(cx) + r, W), min(int(cy) + r, H))
+    if box[2] <= box[0] or box[3] <= box[1]:
+        return                              # 顔が描く範囲の外（部分描画のとき）
     loc, hit = face_uv(groups[fi], P, Rv, box)
     x0, y0 = box[0], box[1]
     sub = img[y0:box[3], x0:box[2]]
@@ -763,10 +989,14 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes, groups):
         iris = inside & (u * u + v * v < 1.0)
         tt = v
         paint(iris, EYE_C["iris"], 0.85)
+        # 色の境目に中間色を 1 段（3 色の帯が縞に見えないように：講評より）
+        paint(iris & (tt > 0.28), mix(EYE_C["iris"], EYE_C["iris_acc"], 0.5), 0.85)
         paint(iris & (tt > 0.38), EYE_C["iris_acc"], 0.85)
+        paint(iris & (tt > 0.53), mix(EYE_C["iris_acc"], EYE_C["iris_top"], 0.5), 0.85)
         paint(iris & (tt > 0.62), EYE_C["iris_top"], 0.85)
         paint(iris & (t > top - 0.8), EYE_C["iris_top"], 0.85)          # 上まぶたの落ち影
-        paint(iris & (tt < -0.15), EYE_C["iris_lo"], 0.85)
+        paint(iris & (tt < -0.05), mix(EYE_C["iris"], EYE_C["iris_lo"], 0.5), 0.85)
+        paint(iris & (tt < -0.18), EYE_C["iris_lo"], 0.85)
         paint(iris & (tt < -0.62) & (np.abs(u) < 0.75), EYE_C["iris_rim"], 0.85)
         paint(iris & (u * u + v * v > 0.78) & (tt > -0.4), EYE_C["iris_edge"], 0.85)
         # 瞳孔（縦長、少し上）
@@ -809,8 +1039,8 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes, groups):
         s = (abs(bx) - np.abs(X)) / 2.9
         s = np.where(np.sign(X) == side, s, 9)
         yc = by + 0.55 * (1 - s * s) + 0.35 * s
-        wid = 0.5 * (1 - 0.45 * np.abs(s))
-        paint((s > -1.05) & (s < 1.0) & (np.abs(Y - yc) < wid), BROW_C, 0.95)
+        wid = 0.42 * (1 - 0.45 * np.abs(s))
+        paint((s > -1.05) & (s < 1.0) & (np.abs(Y - yc) < wid), BROW_C, 0.7)   # 透け眉：髪の色を透かして淡く
 
     # --- 鼻：鼻先の小さな影（光と反対側）だけ ---
     nx, ny = FP["nose"]
@@ -877,9 +1107,9 @@ def draw_accessories(img, gmap, names, P, Rv, bob):
           ids("hair", "bangs"))
     # ネックレス：細い金の鎖（1px の点を詰めて並べる）と小さなチャーム
     for xx in np.linspace(-2.6, 2.6, 11):
-        x, y, _ = pj(TX((xx, 118.7 - 0.2 * xx * xx, 4.2)))
+        x, y, _ = pj(TX((xx, 117.4 + 0.16 * xx * xx, 4.4)))      # 鎖は重力で ∪ 字に垂れる
         stamp(img, gmap, x, y, ["g"], {"g": ACC["gold"]}, ids("torso_skin", "tee"))
-    x, y, _ = pj(TX((0.0, 117.0, 4.6)))
+    x, y, _ = pj(TX((0.0, 116.4, 4.8)))
     stamp(img, gmap, x, y + 1, [".g.", "gGg", ".g."], {"g": hx("#c89a40"), "G": hx("#fff0b0")}, ids("torso_skin", "tee"))
     # カーディガンのボタン（2×2、上に光）
     for yb in (110, 103, 96, 89):
@@ -889,16 +1119,15 @@ def draw_accessories(img, gmap, names, P, Rv, bob):
     x, y, _ = pj(TX((-3.6, 104.5, 8.6)))
     stamp(img, gmap, x, y, TEE_HEART, {"h": MAT["bag"]["base"]}, ids("tee"))
     # バッグの金具
-    x, y, _ = pj(v3(-11.4, 74.4 + bob, 8.2))
-    stamp(img, gmap, x, y, ["lggggggl", "lGGGGGGl"], {"l": MAT["bag"]["line"], "g": ACC["gold"], "G": hx("#c89a40")},
-          ids("bag"))
+    x, y, _ = pj(BAG_C0 + v3(0, bob, 0) + BAG_R @ v3(0, 0.2, 3.3))          # フタの先の留め金
+    stamp(img, gmap, x, y, [".gg.", "gGGg", ".gg."], {"g": ACC["gold"], "G": hx("#fff0b0")}, ids("bag"))
     # 膝・肘の血色（肌より少し赤い小さな楕円）
     yy, xx = np.mgrid[0:H, 0:W]
     for side, leg in (("L", "leg_w"), ("R", "leg_f")):
         x, y, _ = pj(P["knee_" + side] + v3(0, 0.8, 3.4))
-        m = ((xx + 0.5 - x) / (1.6 * RES)) ** 2 + ((yy + 0.5 - y) / (0.9 * RES)) ** 2 < 1
+        m = ((xx + 0.5 - x) / (1.7 * RES)) ** 2 + ((yy + 0.5 - y) / (1.1 * RES)) ** 2 < 1   # 小さく淡く
         m &= np.isin(gmap, ids(leg))
-        img[m, :3] = (img[m, :3] * 0.7 + np.array(hx("#ffa8a0")[:3]) * 0.3).astype(np.uint8)   # 柔らかく混ぜる
+        img[m, :3] = (img[m, :3] * 0.88 + np.array(hx("#ffa8a0")[:3]) * 0.12).astype(np.uint8)   # 薄く柔らかく混ぜる
 
 
 def composite(sprite, scale, P=None, Rv=None):
@@ -910,14 +1139,17 @@ def composite(sprite, scale, P=None, Rv=None):
         base[..., i] = (BG_TOP[i] * (1 - t) + BG_BOTTOM[i] * t).astype(np.uint8)
     base[..., 3] = 255
     if P is not None:
-        g = B.GROUND_ROW * RES
-        for name, rx, ry, k in (("ankle_L", 6.5, 1.6, 0.68), ("ankle_R", 3.6, 1.2, 0.72)):
+        g = B.GROUND_ROW * RES - OY
+        m = ((xx + 0.5 - (49 * RES - OX)) / (15 * RES)) ** 2 + ((yy + 0.5 - g) / (2.4 * RES)) ** 2 <= 1
+        base[m, :3] = (base[m, :3] * 0.9).astype(np.uint8)                 # 全体の淡い影
+        for name, rx, ry, k in (("ankle_L", 6.0, 1.4, 0.74), ("ankle_R", 3.6, 1.1, 0.8)):
             a = P[name]
             x, y, z = project(B.body_dst(v3(a[0], 0, a[2] + 5)), Rv)
             m = ((xx + 0.5 - x) / (rx * RES)) ** 2 + ((yy + 0.5 - g) / (ry * RES)) ** 2 <= 1
             base[m, :3] = (base[m, :3] * k).astype(np.uint8)
-        m = ((xx + 0.5 - 49 * RES) / (15 * RES)) ** 2 + ((yy + 0.5 - g) / (2.4 * RES)) ** 2 <= 1
-        base[m, :3] = (base[m, :3] * 0.88).astype(np.uint8)
+            # 接地影：靴の真下だけ、もう 1 段濃く細い影（立っている重さ。講評より）
+            m2 = ((xx + 0.5 - x) / (rx * 0.75 * RES)) ** 2 + ((yy + 0.5 - g - 0.2 * RES) / (0.55 * RES)) ** 2 <= 1
+            base[m2, :3] = (base[m2, :3] * (0.82 if name == "ankle_L" else 0.9)).astype(np.uint8)
     a = sprite[..., 3:4] / 255.0
     base[..., :3] = (sprite[..., :3] * a + base[..., :3] * (1 - a)).astype(np.uint8)
     return Image.fromarray(base, "RGBA").resize((w * scale, h * scale), Image.NEAREST)
