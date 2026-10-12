@@ -132,13 +132,31 @@ class RoundBox:
 class Group:
     """1つの素材・パーツ（皮膚、カーディガン、髪…）。基本形を smooth min でつなぎ、cut で削る。"""
 
-    def __init__(self, name, mat, prims, k=1.5, inflate=0.0, cut=None, warp=None, line=True):
+    def __init__(self, name, mat, prims, k=1.5, inflate=0.0, cut=None, warp=None, line=True, scale=None):
         self.name, self.mat, self.prims, self.k = name, mat, prims, k
         self.inflate, self.cut, self.warp, self.line = inflate, cut, warp, line
         cs = np.array([p.bound[0] for p in prims])
         c = cs.mean(axis=0)
         r = max(np.linalg.norm(p.bound[0] - c) + p.bound[1] for p in prims) + abs(inflate) + 4
+        self.raw_bound = (c, r)
+        self.scale = None
         self.bound = (c, r)
+        if scale is not None:
+            self.set_xf(scale[0], scale[1], scale[0])
+
+    def set_xf(self, src, k, dst):
+        """拡大縮小と移動：元の座標 src を中心に k 倍して dst へ置く（SDF は距離×k で正しいまま）。
+        頭だけ大きくする・体だけ小さくする、に使う。"""
+        src, dst = np.asarray(src, float), np.asarray(dst, float)
+        self.scale = (src, k, dst)
+        c, r = self.raw_bound
+        self.bound = (dst + (c - src) * k, r * k)
+
+    def to_src(self, Q):
+        if self.scale is None:
+            return Q
+        src, k, dst = self.scale
+        return src + (Q - dst) / k
 
     def raw(self, P):
         d = None
@@ -157,13 +175,16 @@ class Group:
         near = db < 2.0
         if near.any():
             Q = P[near]
+            k_ = 1.0 if self.scale is None else self.scale[1]
+            Q = self.to_src(Q)
             if self.warp is not None:
                 Q = self.warp(Q)
-            out[near] = self.raw(Q)
+            out[near] = self.raw(Q) * k_
         return out
 
     def nearest_prim(self, P):
-        Q = P if self.warp is None else self.warp(P)
+        Q = self.to_src(P)
+        Q = Q if self.warp is None else self.warp(Q)
         ds = np.stack([p.d(Q) for p in self.prims], axis=1)
         return ds.argmin(axis=1)
 
@@ -179,7 +200,18 @@ HEAD_TILT = math.radians(-6.0)  # 頭：肩と逆に傾ける（画面で頭頂�
 HEAD_YAW = math.radians(9.0)    # 顔を体よりこちらへ向ける
 BODY_YAW = math.radians(-18.0)  # 体を 3/4 向きに（キャラの左半身が手前）
 PITCH = math.radians(5.0)       # 少し上から見下ろす
+HEAD_SCALE = 1.06              # 頭を 1.06 倍（約5.0頭身）。大きな頭は可愛さの要素だが、1.1 倍では頭でっかちになった（docs/12）
+BODY_SCALE = 0.94              # 首から下を 0.94 倍（小柄に。頭と目の大きさは変えない。docs/12）
 ANIME_SMOOTH = 3.0              # 筋肉どうしをつなぐ幅（1.5 で写実寄り、3〜4 でアニメ寄り。docs/10 10-5）
+
+
+def head_dst(p, P):
+    """頭の座標（拡大前）→ 画面に出る位置（体の縮小・頭の拡大を反映）。"""
+    return P["head"] * BODY_SCALE + (p - P["head"]) * HEAD_SCALE
+
+
+def body_dst(p):
+    return p * BODY_SCALE
 
 
 def ik(a, target, l1, l2, pole):
@@ -202,8 +234,8 @@ def make_pose(bob=0.0):
     up = v3(0, bob, 0)
     P["neck_pit"] = v3(0, 119.1, 1.5) + up
     P["head"] = v3(0, 127.0, -0.5) + up   # v4 より 2.8px 上げて首を長く（首 0.20 → 0.28 頭、docs/11）
-    P["shoulder_L"] = v3(-15.6, 117.2, -1.5) + up
-    P["shoulder_R"] = v3(15.6, 120.4, -1.5) + up
+    P["shoulder_L"] = v3(-14.9, 117.2, -1.5) + up   # v6：肩を少し狭く（頭が大きいほど肩は控えめに）
+    P["shoulder_R"] = v3(14.9, 120.4, -1.5) + up
     P["hip_L"], P["hip_R"] = v3(-7.6, 81.3, 0), v3(6.9, 79.8, 0)
     # 腕：左（画面左）はバッグの上に手を置く、右は胸の前でストラップを握る
     P["elbow_L"], P["wrist_L"] = ik(P["shoulder_L"], v3(-12.6, 76.6, 6.8) + up,
@@ -315,7 +347,7 @@ def torso_prims(bob):
     E((0, 104.5, -0.5), (10.4, 13.0, 7.4), "ribcage")                 # 胸郭
     for s in (-1, 1):
         E((s * 5.0, 100.8, 5.6), (4.5, 4.1, 3.6), "breast")           # 胸（控えめ）
-        E((s * 15.0, 116.4, -1.2), (4.2, 5.2, 4.4), "deltoid")        # 三角筋（肩の丸み）
+        E((s * 14.3, 116.4, -1.2), (4.0, 5.0, 4.2), "deltoid")        # 三角筋（肩の丸み）
         E((s * 7.0, 120.2, -2.6), (6.2, 2.5, 3.4), "trapezius", rot_z(-s * 0.32))  # 僧帽筋（首から肩への斜面）
     E((0, 90.5, 0.6), (8.4, 8.5, 6.3), "abdomen")                     # 腹部・ウエスト
     E((-0.5, 80.5, 0.0), (12.6, 8.0, 7.6), "pelvis")                  # 骨盤
@@ -326,7 +358,7 @@ def torso_prims(bob):
 
 def neck_prims(bob, head_pt):
     T = lambda c0: torso_xf(v3(*c0), bob)[0]
-    out = [RoundCone(T((0, 116.0, -0.5)), head_pt + v3(0, 2.5, -1.2), 4.3, 3.9, "neck")]
+    out = [RoundCone(T((0, 116.0, -0.5)), head_pt + v3(0, 2.5, -1.2), 4.1, 3.7, "neck")]   # 首は細め
     for s in (-1, 1):  # 胸鎖乳突筋：耳の後ろ → 鎖骨の内端（首の斜めの筋）
         out.append(RoundCone(head_pt + v3(s * 4.6, 4.5, -1.5), T((s * 1.2, 118.6, 2.7)), 1.3, 1.1, "sternocleidomastoid"))
         # 鎖骨：浅い S 字の棒（胸骨の端 → 肩先）。皮膚のすぐ下にあり、細い稜線になる
@@ -348,14 +380,14 @@ def face_prims(P):
     # そこから顎先へ「なめらかな V」で細くなる。顎の角（えら）は作らない
     out = [
         Ellipsoid(L(0, 17.5, -1.0), (13.7, 13.3, 13.3), Rh, "cranium"),
-        Ellipsoid(L(0, 10.6, 2.2), (11.8, 6.6, 9.2), Rh, "cheek"),
-        Ellipsoid(L(0, 2.8, 5.4), (3.2, 2.2, 2.7), Rh, "chin"),
+        Ellipsoid(L(0, 10.4, 2.4), (12.2, 7.0, 9.6), Rh, "cheek"),      # v6：頬をふっくら（ベビースキーマ）
+        Ellipsoid(L(0, 2.9, 5.4), (3.8, 2.4, 2.9), Rh, "chin"),          # 顎先は小さく丸く（V → U 寄り）
     ]
     for s in (-1, 1):
         # 頬骨：3/4 向きで奥の輪郭の「目の下の外側」に小さなふくらみを作る
         out.append(Ellipsoid(L(s * 8.4, 11.4, 7.8), (2.6, 2.0, 2.0), Rh, "cheekbone"))
         # 顎のライン：頬から顎先へ細くなる円錐
-        out.append(RoundCone(L(s * 9.0, 8.6, 2.6), L(s * 1.6, 2.8, 5.4), 3.0, 2.2, "jaw"))
+        out.append(RoundCone(L(s * 9.2, 8.6, 2.6), L(s * 1.8, 2.9, 5.4), 3.2, 2.6, "jaw"))
     return out
 
 
@@ -412,7 +444,7 @@ def build_scene(bob=0.0, anatomy=False):
     groups.append(Group("arm_L", MAT["skin"], arm_prims(P["shoulder_L"], P["elbow_L"], P["wrist_L"], -1, "L_"), k=1.8))
     groups.append(Group("arm_R", MAT["skin"], arm_prims(P["shoulder_R"], P["elbow_R"], P["wrist_R"], +1, "R_"), k=1.8))
     groups.append(Group("hands", MAT["skin"], hand_prims(P), k=1.2))
-    face = Group("face", MAT["skin"], face_prims(P), k=3.0)
+    face = Group("face", MAT["skin"], face_prims(P), k=3.0, scale=(P["head"], HEAD_SCALE))
     groups.append(face)
 
     if anatomy:
@@ -457,7 +489,7 @@ def build_scene(bob=0.0, anatomy=False):
         # --- カーディガン：肩・胸を大きくふくらませた殻＋胸から裾まで真っすぐ落ちる筒。前を開ける ---
         drape_top, Rt = TX((0, 104.0, -0.4))
         drape_bot, Rb = TX((0, 79.2, -0.2))
-        card_prims = [Ellipsoid(p.c, p.r + 1.9, p.R, p.tag) for p in torso
+        card_prims = [Ellipsoid(p.c, p.r + 1.7, p.R, p.tag) for p in torso
                       if p.tag in ("ribcage", "breast", "deltoid", "trapezius")]
         card_prims.append(RoundCone(drape_top, drape_bot, 12.4, 13.6, "drape"))
         hem_n = Rb @ v3(0, 1, 0)
@@ -614,8 +646,8 @@ def build_scene(bob=0.0, anatomy=False):
         return np.stack([x, y, rel[:, 2]], axis=1) + o
 
     # 束（strand 以外）は smin を小さくして束感を残す
-    groups.append(Group("hair", MAT["hair"], hair, k=2.0, cut=hair_cut, warp=hair_warp))
-    groups.append(Group("bangs", MAT["hair"], front, k=0.8, warp=hair_warp))
+    groups.append(Group("hair", MAT["hair"], hair, k=2.0, cut=hair_cut, warp=hair_warp, scale=(o, HEAD_SCALE)))
+    groups.append(Group("bangs", MAT["hair"], front, k=0.8, warp=hair_warp, scale=(o, HEAD_SCALE)))
 
     if not anatomy:
         # ストラップ：画面右の肩から胸の前を通ってバッグへ。服の表面の少し外側に沿わせる
@@ -632,6 +664,12 @@ def build_scene(bob=0.0, anatomy=False):
         sp[0] = sp[0] + v3(0, 0, -3.0)
         groups.append(Group("strap", MAT["strap"], [RoundCone(a, b, 0.8, 0.8, "strap") for a, b in zip(sp, sp[1:])],
                             k=0.5))
+    # 体は足元を中心に縮小、頭は首の付け根（縮小後の位置）に元の大きさ×HEAD_SCALE で載せる
+    for g in groups:
+        if g.name in ("face", "hair", "bangs"):
+            g.set_xf(P["head"], HEAD_SCALE, P["head"] * BODY_SCALE)
+        else:
+            g.set_xf(np.zeros(3), BODY_SCALE, np.zeros(3))
     return groups, P
 
 
@@ -752,6 +790,10 @@ def render(bob=0.0, eyes="open", anatomy=False, yaw=BODY_YAW, face_details=True)
     _, gid = scene_d(groups, Ph)
     gid_full[idx] = gid
     N = normals(groups, Ph, gid)
+    Ph_src = Ph.copy()            # 各パーツの元の座標（模様・顔の法線・インナーカラーの判定に使う）
+    for g in np.unique(gid):
+        m = gid == g
+        Ph_src[m] = groups[g].to_src(Ph[m])
     Lm = L_VIEW @ Rv                      # 光の向きをモデル座標へ
     Vm = np.array([0, 0, 1.0]) @ Rv       # 視線（カメラの方向）
 
@@ -761,8 +803,9 @@ def render(bob=0.0, eyes="open", anatomy=False, yaw=BODY_YAW, face_details=True)
     if mface.any():
         Rh = head_frame(P)
         c = P["head"] + Rh @ v3(0, 15.0, -2.0)
-        q = (Ph[mface] - c) @ Rh / np.array([12.0, 15.0, 12.0])
-        ns = (q / np.array([12.0, 15.0, 12.0])) @ Rh.T
+        rad = np.array([12.0, 15.0, 12.0])
+        q = (Ph_src[mface] - c) @ Rh / rad
+        ns = (q / rad) @ Rh.T
         ns = ns / np.linalg.norm(ns, axis=1, keepdims=True)
         ns = ns + Vm * 0.9                 # 正面寄りに倒して影を減らす
         N[mface] = ns / np.linalg.norm(ns, axis=1, keepdims=True)
@@ -791,7 +834,7 @@ def render(bob=0.0, eyes="open", anatomy=False, yaw=BODY_YAW, face_details=True)
     lv[ring] = np.maximum(lv[ring] - 2, 0)
     # インナーカラー：ボブの内側（首に近い面）
     Rh = head_frame(P)
-    ql = (Ph - P["head"]) @ Rh
+    ql = (Ph_src - P["head"]) @ Rh
     inner = mh & (ql[:, 1] < 10.5) & (np.hypot(ql[:, 0], ql[:, 2] + 3.0) < 14.2)
 
     # 段階 → 色
@@ -814,7 +857,7 @@ def render(bob=0.0, eyes="open", anatomy=False, yaw=BODY_YAW, face_details=True)
 
     # ディテール（3D 座標から模様を付ける）
     if not anatomy:
-        texture_details(img, idx, Ph, gid, names, lv, P, bob)
+        texture_details(img, idx, Ph_src, gid, names, lv, P, bob)
 
     # リムライト：影側で、輪郭に近い（視線とほぼ直角の）面
     fres = 1 - np.abs(N @ Vm)
@@ -917,6 +960,8 @@ def texture_details(img, idx, Ph, gid, names, lv, P, bob):
 # 顔パーツのスタンプ（docs/11 11-5：2020年代の目・顔）
 # ---------------------------------------------------------------------------
 FACE_STYLE = "modern"   # "classic" で v4 までの目（比較用）
+# 顔パーツの高さ（頭の座標、頭頂 30.8・顎 0.6）。目を少し下げ、口を目に近づける（docs/12 12-2）
+EYE_Y, NOSE_Y, MOUTH_Y = 12.2, 7.6, 5.9
 
 MODERN_PAL = {
     "c": hx("#d9a29a"),  # 二重のライン（細く、肌より少し濃い色）
@@ -942,28 +987,24 @@ MODERN_PAL = {
 
 #   列0 = 目尻（外側）、列7 = 目頭。8×8 の目（v4 の 8×10 より横長）＋二重・下まつ毛・涙袋（docs/11 11-5）
 EYE_MODERN = [
-    "..cccc..",   # 0 二重のライン（細く、目尻寄り）
+    "..ccc...",   # 0 二重のライン
     "k.KKKKk.",   # 1 まつ毛の毛束（目尻に1本はね）
-    "KKKqkkkK",   # 2 上まぶたのライン：目尻が太く目頭へ細く。q＝白抜き
-    "KwUUUUdw",   # 3 目尻が下がる（たれ目）。まぶたの厚みの影が白目と瞳の上に落ちる。U＝瞳の上部の差し色
-    ".wdLPPdW",   # 4 d＝虹彩のふち（輪郭の暗い輪）、L＝小さなハイライト、P＝瞳孔
-    ".WdIPPdW",   # 5
-    ".WdIIIdW",   # 6
-    ".WdJJxIp",   # 7 下は明るい（反射光）、x＝補色の小さなきらめき、p＝目頭の赤み（涙丘）
-    "..JGGJ..",   # 8 扇形の照り返し
-    ".bb.....",   # 9 下まつ毛は目尻側だけ
-    "..tttt..",   # 10 涙袋のハイライト
+    "KKKqkkkK",   # 2 上まぶた：目尻が太く目頭へ細い、q＝白抜き
+    "KwdLPPdw",   # 3 瞳の上部はまぶたに少し隠れる（力の抜けた優しい目）。目尻が下がる（たれ目）
+    ".WdIPPdW",   # 4 黒目がち：瞳は目の幅の 5/8、瞳孔は大きめ
+    ".WdJxldp",   # 5 下は明るいピンク、x＝きらめき、l＝副ハイライト、p＝目頭の赤み
+    "..dGGd..",   # 6 扇形の照り返し（瞳の下端が下まぶたに接する）
+    ".bb.....",   # 7 下まつ毛は目尻側だけ
+    "..tttt..",   # 8 ふっくらした涙袋
 ]
 EYE_MODERN_HALF = [
     "........",
     "........",
-    "........",
-    "..cccc..",
+    "..ccc...",
     "k.KKKKk.",
     "KKKqkkkK",
-    "KwdLPPdw",
-    ".WdJJxIp",
-    "..JGGJ..",
+    "KwdJxJdp",
+    "..dGGd..",
     ".bb.....",
     "..tttt..",
 ]
@@ -971,20 +1012,19 @@ EYE_MODERN_CLOSED = [
     "........",
     "........",
     "........",
-    "........",
-    "..cccc..",
+    "..ccc...",
     "........",
     "k.......",
     "KK....KK",
     "..KKKK..",
-    ".k.k....",
     "..tttt..",
 ]
-IRIS_ROWS = {3, 4, 5, 6, 7, 8}   # 瞳の行（右目にするとき左右反転しない）
+IRIS_ROWS = {3, 4, 5, 6}   # 瞳の行（右目にするとき左右反転しない）
 
 
 def mirror_eye(rows, iris_rows):
-    """右目：まぶた・まつ毛の形は左右反転、瞳とハイライトの向きはそのまま（寄り目防止）。"""
+    """右目：まぶた・まつ毛の形は左右反転、瞳とハイライトの向きはそのまま（寄り目防止）。
+    列0＝目尻、列1＝白目、列2〜6＝瞳、列7＝目頭（8px 幅）。"""
     out = []
     for j, r in enumerate(rows):
         m = r[::-1]
@@ -994,20 +1034,21 @@ def mirror_eye(rows, iris_rows):
 
 def draw_face_modern(put, eyes, hi_, bi):
     rows = {"open": EYE_MODERN, "half": EYE_MODERN_HALF, "closed": EYE_MODERN_CLOSED}[eyes]
-    iris = IRIS_ROWS if eyes == "open" else ({6, 7, 8} if eyes == "half" else {7})
+    iris = IRIS_ROWS if eyes == "open" else ({5, 6} if eyes == "half" else set())
     far = [r[:1] + r[2:] for r in rows]          # 奥の目（3/4 向き）は1列狭く
     # 目は前髪の上にも描く（前髪越しに目元が見える「透け」。まつ毛が前髪に隠れると眠そうに見える）
-    put((-7.3, 12.9, 11.6), far, MODERN_PAL, allow=(bi,))
-    put((7.3, 12.9, 11.6), mirror_eye(rows, iris), MODERN_PAL, allow=(bi,))
-    # 眉：細く短く、前髪越しに透ける
-    put((-7.0, 19.6, 12.4), ["..EEEE"], FACE_PAL, allow=(hi_, bi))
-    put((7.0, 19.6, 12.4), ["EEEE.."], FACE_PAL, allow=(hi_, bi))
-    put((0.4, 8.0, 12.6), ["N"], FACE_PAL)                      # 鼻は1px の影だけ
-    put((0.2, 5.8, 11.9), ["MmmM", ".MM."], {"M": hx("#b45a66"), "m": hx("#e8848e")})   # 小さく開いた口
-    # チーク：斜線は使わず、目の下に横長でやわらかく（2段階の色）
-    soft = {"r": hx("#ffd0c6"), "R": hx("#ffb6ae")}
-    put((-8.4, 8.4, 10.4), [".rrr", "rRRr", ".rr."], soft)
-    put((9.0, 8.4, 10.4), ["rrrr.", "rRRRr", ".rrr."], soft)
+    put((-7.3, EYE_Y, 11.6), far, MODERN_PAL, allow=(bi,))
+    put((7.3, EYE_Y, 11.6), mirror_eye(rows, iris), MODERN_PAL, allow=(bi,))
+    # 眉：細く、ゆるいアーチ。眉頭（内側）を少し上げた「ほんのり困り眉」は守ってあげたくなる可愛さ
+    put((-7.0, 18.8, 12.4), ["...EEE", ".EE..."], FACE_PAL, allow=(hi_, bi))
+    put((7.0, 18.8, 12.4), ["EEE...", "...EE."], FACE_PAL, allow=(hi_, bi))
+    put((0.4, NOSE_Y, 12.6), ["N"], FACE_PAL)                   # 鼻は1px の影だけ
+    # 口：小さな ∪ の笑顔（口角を上げる）。目に近づけて「目と口の三角形」を低く広く（狸顔・童顔）
+    put((0.2, MOUTH_Y, 11.9), ["M..M", ".MM."], {"M": hx("#b45a66")})
+    # チーク：斜線は使わず、涙袋のすぐ下に横長でやわらかく
+    soft = {"r": hx("#ffc8be"), "R": hx("#ffaaa4")}
+    put((-8.4, 7.4, 10.4), [".rrrr", "rRRRr", ".rrr."], soft)
+    put((9.0, 7.4, 10.4), ["rrrr.", "rRRRr", ".rrr."], soft)
 
 
 def draw_face_classic(put, eyes, hi_, bi):
@@ -1048,7 +1089,7 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes):
     o = P["head"]
 
     def put(local, rows, pal, allow=(None,), face_only=True):
-        x, y, z = project(o + Rh @ v3(*local), Rv)
+        x, y, z = project(head_dst(o + Rh @ v3(*local), P), Rv)
         w, h = max(len(r) for r in rows), len(rows)
         x0, y0 = int(round(x - w / 2)), int(round(y - h / 2))
         for j, row in enumerate(rows):
@@ -1075,9 +1116,10 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes):
 
 def draw_accessories(img, gmap, vz, names, P, Rv, bob):
     gi = {n: k for k, n in enumerate(names)}
+    pj = lambda p: project(body_dst(p), Rv)   # 体の座標 → 画面（体の縮小を反映）
 
     def dot(p, color, on):
-        x, y, z = project(p, Rv)
+        x, y, z = pj(p)
         px, py = int(x), int(y)
         if 0 <= px < W and 0 <= py < H and gmap[py, px] in [gi[n] for n in on if n in gi]:
             img[py, px] = color
@@ -1087,20 +1129,20 @@ def draw_accessories(img, gmap, vz, names, P, Rv, bob):
         dot(TX((x, 118.6 - 0.18 * x * x, 4.2)), ACC["gold"], ("torso_skin", "tee"))
     for y in (110, 103, 96, 89):  # カーディガンのボタン（キャラの左の前立て）
         c = TX((5.6, y, 9.6))
-        x, yy, z = project(c, Rv)
+        x, yy, z = pj(c)
         px, py = int(x), int(yy)
         if 0 <= px < W and 0 <= py < H and gmap[py, px] == gi["cardigan"]:
             img[py, px] = ACC["button"]
     # Tシャツのハート
     hc = TX((-3.6, 104.5, 8.6))
-    x, y, z = project(hc, Rv)
+    x, y, z = pj(hc)
     for j, row in enumerate([".h.h.", "hhhhh", ".hhh.", "..h.."]):
         for i, ch in enumerate(row):
             px, py = int(x) - 2 + i, int(y) - 1 + j
             if ch == "h" and 0 <= px < W and 0 <= py < H and gmap[py, px] == gi["tee"]:
                 img[py, px] = MAT["bag"]["base"]
     # バッグの金具
-    bx, by, bz = project(v3(-11.4, 74.4 + bob, 8.2), Rv)
+    bx, by, bz = pj(v3(-11.4, 74.4 + bob, 8.2))
     for i, c in enumerate([MAT["bag"]["line"], ACC["gold"], ACC["gold"], MAT["bag"]["line"]]):
         px, py = int(bx) - 2 + i, int(by)
         if 0 <= px < W and 0 <= py < H and gmap[py, px] == gi["bag"]:
@@ -1108,7 +1150,7 @@ def draw_accessories(img, gmap, vz, names, P, Rv, bob):
     # 膝の血色
     for side, leg in (("L", "leg_w"), ("R", "leg_f")):
         k = P["knee_" + side]
-        x, y, z = project(k + v3(0, 0.8, 3.4), Rv)
+        x, y, z = pj(k + v3(0, 0.8, 3.4))
         for dxp in (0, 1):
             px, py = int(x) + dxp - 1, int(y)
             if 0 <= px < W and 0 <= py < H and gmap[py, px] == gi[leg]:
@@ -1176,7 +1218,7 @@ def composite(sprite, scale, P=None, Rv=None):
     if P is not None:  # 接地影：支持脚は足全体、遊脚はつま先だけ
         for name, rx, ry, k in (("ankle_L", 6.5, 1.6, 0.68), ("ankle_R", 3.6, 1.2, 0.72)):
             a = P[name]
-            x, y, z = project(v3(a[0], 0, a[2] + 5), Rv)
+            x, y, z = project(body_dst(v3(a[0], 0, a[2] + 5)), Rv)
             m = ((xx + 0.5 - x) / rx) ** 2 + ((yy + 0.5 - GROUND_ROW) / ry) ** 2 <= 1
             base[m, :3] = (base[m, :3] * k).astype(np.uint8)
         m = ((xx + 0.5 - 49) / 15) ** 2 + ((yy + 0.5 - GROUND_ROW) / 2.4) ** 2 <= 1
@@ -1191,25 +1233,31 @@ def report():
     P = make_pose(0.0)
     Rh = head_frame(P)
     o = P["head"]
-    top = (o + Rh @ v3(0, 30.8, -1.0))[1]
-    chin = (o + Rh @ v3(0, 0.6, 5.4))[1]
+    top = head_dst(o + Rh @ v3(0, 30.8, -1.0), P)[1]
+    chin = head_dst(o + Rh @ v3(0, 0.6, 5.4), P)[1]
+    BS = BODY_SCALE
     head = top - chin
-    face_w = 2 * 13.7 * math.sqrt(1 - (3.9 / 13.3) ** 2)        # 目の高さでの顔の幅
-    eye_w, eye_cx = 8.0, 7.3
+    HS = HEAD_SCALE
+    face_w = 2 * 13.7 * math.sqrt(1 - (3.9 / 13.3) ** 2) * HS   # 目の高さでの顔の幅
+    eye_w, eye_cx = 8.0, 7.3 * HS
     rows = [
         ("頭身", top / head),
-        ("首の長さ（顎〜頸窩）÷ 頭の高さ", (chin - P["neck_pit"][1]) / head),
-        ("首の幅 ÷ 顔の幅", 8.6 / face_w),
-        ("肩幅（三角筋の外側）÷ 顔の幅", 2 * (15.0 + 4.2) / face_w),
-        ("手の長さ（手首〜指先）÷ 頭の高さ", (2 * 3.2 + 1.4 + 4.4 * 0.6 + 1.0) / head),
-        ("足の長さ（靴の中の足）÷ 頭の高さ", np.linalg.norm(SHOES[0][2] - SHOES[0][1]) / head),
+        ("首の長さ（顎〜頸窩）÷ 頭の高さ", (chin - P["neck_pit"][1] * BS) / head),
+        ("首の幅 ÷ 顔の幅", 8.2 * BS / face_w),
+        ("肩幅（三角筋の外側）÷ 顔の幅", 2 * (14.3 + 4.0) * BS / face_w),
+        ("手の長さ（手首〜指先）÷ 頭の高さ", (2 * 3.2 + 1.4 + 4.4 * 0.6 + 1.0) * BS / head),
+        ("足の長さ（靴の中の足）÷ 頭の高さ", np.linalg.norm(SHOES[0][2] - SHOES[0][1]) * BS / head),
         ("目の幅 ÷ 顔の幅", eye_w / face_w),
         ("両目の間 ÷ 目の幅", (2 * eye_cx - eye_w) / eye_w),
         ("目尻〜輪郭 ÷ 目の幅", (face_w / 2 - eye_cx - eye_w / 2) / eye_w),
-        ("目の中心（頭頂から）", (30.8 - 13.6) / head),
-        ("鼻（頭頂から）", (30.8 - 8.0) / head),
-        ("口（頭頂から）", (30.8 - 5.8) / head),
-        ("髪の厚み（頭頂）÷ 頭の高さ", (18.4 + 14.3 - 30.8) / head),
+        ("目の中心（頭頂から）", (30.8 - EYE_Y) * HS / head),
+        ("鼻（頭頂から）", (30.8 - NOSE_Y) * HS / head),
+        ("口（頭頂から）", (30.8 - MOUTH_Y) * HS / head),
+        ("目と口の三角形：高さ ÷ 両目の間隔（小さいほど童顔）", (EYE_Y - MOUTH_Y) / (2 * 7.3)),
+        ("瞳の幅 ÷ 目の幅", 5 / eye_w),
+        ("目の高さ（まつ毛〜下端）÷ 頭の高さ", 6 / head),
+        ("顔の幅 ÷ 頭の高さ", face_w / head),
+        ("髪の厚み（頭頂）÷ 頭の高さ", (18.4 + 14.3 - 30.8) * HS / head),
     ]
     for k, v in rows:
         print(f"{k}: {v:.2f}")
