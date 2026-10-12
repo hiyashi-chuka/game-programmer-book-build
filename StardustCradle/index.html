@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>星屑のクレイドル ―STARDUST CRADLE―</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #07051a; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; font-family: "DotGothic16", monospace; }
+  #screen { image-rendering: pixelated; image-rendering: crisp-edges; display: block; box-shadow: 0 0 60px rgba(255, 95, 162, 0.18); }
+  #touch { display: none; position: fixed; inset: 0; pointer-events: none; }
+  #touch .btn, #tpad { pointer-events: auto; position: absolute; border-radius: 50%; border: 2px solid rgba(78, 240, 255, 0.55);
+    background: rgba(20, 12, 40, 0.35); color: #e8e4ff; font: 14px "DotGothic16", monospace; display: flex; align-items: center; justify-content: center;
+    user-select: none; -webkit-user-select: none; touch-action: none; }
+  #touch .btn.on { background: rgba(255, 95, 162, 0.5); }
+  #tpad { left: 18px; bottom: 18px; width: 130px; height: 130px; }
+  #tpad::after { content: ""; width: 40px; height: 40px; border-radius: 50%; background: rgba(78, 240, 255, 0.3); }
+  .b-ok { right: 22px; bottom: 70px; width: 64px; height: 64px; }
+  .b-cancel { right: 96px; bottom: 26px; width: 54px; height: 54px; }
+  .b-skill { right: 96px; bottom: 100px; width: 46px; height: 46px; }
+  .b-menu { right: 18px; top: 14px; width: 46px; height: 30px; border-radius: 8px !important; font-size: 11px !important; }
+</style>
+</head>
+<body>
+<canvas id="screen" width="480" height="270"></canvas>
+<div id="touch">
+  <div id="tpad"></div>
+  <div class="btn b-ok" data-k="ok">Z</div>
+  <div class="btn b-cancel" data-k="cancel">X</div>
+  <div class="btn b-skill" data-k="skill">C</div>
+  <div class="btn b-menu" data-k="menu">MENU</div>
+</div>
+
+<!-- エンジン -->
+<script src="js/engine/core.js"></script>
+<script src="js/engine/gfx.js"></script>
+<script src="js/engine/audio.js"></script>
+<script src="js/art/pixbuf.js"></script>
+<script src="js/art/chars.js"></script>
+<script src="js/art/portraits.js"></script>
+<script src="js/art/mechs.js"></script>
+<script src="js/art/tiles.js"></script>
+<script src="js/art/props.js"></script>
+<script src="js/engine/state.js"></script>
+<script src="js/engine/map.js"></script>
+<script src="js/engine/entity.js"></script>
+<script src="js/engine/fx.js"></script>
+<script src="js/engine/enemies.js"></script>
+<script src="js/engine/field.js"></script>
+<script src="js/engine/ui.js"></script>
+<script src="js/engine/script.js"></script>
+<script src="js/engine/title.js"></script>
+
+<!-- データ -->
+<script src="js/data/chars.js"></script>
+<script src="js/data/music.js"></script>
+<script src="js/data/cg.js"></script>
+<script src="js/data/story_data.js"></script>
+
+<!-- マップ・ストーリー（CONTENT） -->
+<!--CONTENT-->
+
+<script>G.boot();</script>
+</body>
+</html>
