@@ -89,8 +89,9 @@ def design(D):
     up = B.BANG_UP
     clumps = []
     # 後ろ髪の内側（首の後ろに見える暗い所）：背景の上だけ
-    clumps.append(("inner", "back", "fill", [(-15.0, 10.0), (15.0, 10.0), (14.4, 2.4), (12.6, 0.6), (11.0, 1.8),
-                                              (-11.0, 1.8), (-12.6, 0.6), (-14.4, 2.4)]))
+    # 後ろ髪（首の後ろ）：首の両脇が背景のまま抜けるとヘルメットに見えたので、肩の近くまで下ろす
+    clumps.append(("inner", "back", "fill", [(-15.0, 10.0), (15.0, 10.0), (15.2, 2.0), (14.2, -1.4), (12.0, -3.2),
+                                              (9.0, -2.8), (-9.0, -2.8), (-12.0, -3.2), (-14.2, -1.4), (-15.2, 2.0)]))
     # 土台：頭全体の外形から、顔の窓（生え際〜顎）を抜いた形
     cap = [(CAP_RX * math.cos(a), 17.8 + CAP_RY * math.sin(a)) for a in np.linspace(0, math.pi, 25)]
     base = cap[:]                          # 右 → 頭頂 → 左（下端は束の毛先に任せるため高めで止める）
@@ -135,7 +136,6 @@ def design(D):
                        [w * 0.8, w * 1.0, w * 0.78, w * 0.38, 0.0]))
     # アホ毛・遊び毛
     clumps.append(("ahoge", "front", [(0.4, 31.0), (2.2, 34.8), (5.2, 37.0), (8.0, 36.0)], [1.0, 0.75, 0.45, 0.0]))
-    clumps.append(("stray", "front", [(-13.4, 26.8), (-15.4, 26.6), (-16.4, 25.4)], [0.32, 0.22, 0.0]))
     return clumps
 
 
@@ -233,6 +233,8 @@ def draw(img, gmap, names, P, Rv, D):
     crown_ids = [i for i, c in enumerate(clumps) if c[0] == "crown"]
     bang_ids = [i for i, c in enumerate(clumps) if c[0] == "bang"]
     top_region = pt.mask([(-20.0, 26.8), (20.0, 26.8), (20.0, 40.0), (-20.0, 40.0)])
+    bob_ids = [i for i, c in enumerate(clumps) if c[0].startswith("bob")]
+    upper7 = pt.mask([(-26.0, 7.0), (26.0, 7.0), (26.0, 40.0), (-26.0, 40.0)])
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         nh = sh(hair, dx, dy)
         nt = sh(top, dx, dy, -1)
@@ -241,6 +243,7 @@ def draw(img, gmap, names, P, Rv, D):
             & ~(np.isin(top, crown_ids) & np.isin(nt, crown_ids)) \
             & ~(top_region & np.isin(top, crown_ids + bang_ids) & np.isin(nt, crown_ids + bang_ids))
         # ↑ 頭頂の束どうし、頭頂付近の前髪の根元どうしには線を引かない（分け目のまわりが星形の網目に見えた）
+        innerl &= ~(upper7 & np.isin(top, bob_ids) & np.isin(nt, bob_ids))   # 横の束の線は毛先の近くだけ（すだれ防止）
     lit_side = sh(hair, -2 * RES, -2 * RES) & ~sh(hair, 2 * RES, 2 * RES)
     line_dark = col["line"]
     line_lit = col["line"] * 0.7 + col["s2"] * 0.3
@@ -257,6 +260,14 @@ def draw(img, gmap, names, P, Rv, D):
         thick = hair & ~outer & sh(outer, 1, 1) & ~lit_side & ~tip_top
         out[thick] = line_dark * 0.6 + col["s2"] * 0.4
 
+    # 髪の内側の縁（顔・首・体に接する所）に暗い帯：髪の厚み（講評より）。前髪の毛先には入れない
+    body = (gmap >= 0) & ~hair
+    near_b = np.zeros_like(hair)
+    for dx in range(-RES, RES + 1):
+        near_b |= sh(body, dx, 0)
+    side_kinds = np.isin(np.array(kinds, dtype=object)[np.clip(top, 0, None)],
+                         [k for k in set(kinds) if k.startswith(("bob", "side", "base", "inner"))])
+    out[hair & near_b & side_kinds & ~outer] = col["s1"] * 0.6 + col["s2"] * 0.4
     # 7. 前髪・横髪が顔に落とす影（左上の光 → 右下へ）
     front_hair = hair
     fshadow = face0 & ~hair & sh(front_hair, -1.0 * RES, -1.4 * RES)

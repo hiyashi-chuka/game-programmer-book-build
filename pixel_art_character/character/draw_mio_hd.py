@@ -315,9 +315,12 @@ def render_base(bob=0.0):
     """顔を描く前までの描画（まばたきの差分は finish だけ描き直せばよい）。"""
     B.make_pose = make_pose
     B.HEAD_SCALE, B.BODY_SCALE = HD_HEAD_SCALE, HD_BODY_SCALE
-    B.HEAD_TILT = math.radians(HD_HEAD_TILT)   # 首かしげは控えめに（左右の目の高さの差が「歪み」に見えないように）   # 4.5 頭身（v8 の 5.0 から下げる：docs/15 15-12）
+    B.HEAD_TILT = math.radians(HD_HEAD_TILT)
+    B.HEAD_YAW = math.radians(HD_HEAD_YAW)     # 顔をもう少し正面へ（左右の目の大きさの差が歪みに見えないように）   # 首かしげは控えめに（左右の目の高さの差が「歪み」に見えないように）   # 4.5 頭身（v8 の 5.0 から下げる：docs/15 15-12）
     B.TEE_NECK, B.CARD_NECK = (4.3, 3.0, 6.5), (5.0, 4.0, 7.5)   # 襟ぐりを狭く：首元の肌が横に広がって見えないように
     groups, P = B.build_scene(bob)
+    legs_src = {"L": B.leg_prims(P["hip_L"], P["knee_L"], P["ankle_L"], -1, "L_"),
+                "R": B.leg_prims(P["hip_R"], P["knee_R"], P["ankle_R"], +1, "R_")}
     for i, g in enumerate(groups):
         if g.name in ("leg_w", "leg_f"):
             g.inflate = LEG_SLIM         # 可愛い系は手足を細く（docs/15）
@@ -327,8 +330,12 @@ def render_base(bob=0.0):
             sd = "L" if g.name == "socks_w" else "R"
             kn, an = P["knee_" + sd], P["ankle_" + sd]
             ankle_cover = B.RoundCone(kn + (an - kn) * 0.55, an + v3(0, -1.2, 0), 2.6, 2.4, "sock_ankle")
-            ng = B.Group(g.name, g.mat, [p for p in g.prims if "malleolus" not in p.tag] + [ankle_cover], k=g.k,
-                         inflate=SOCK_SLIM, cut=g.cut)
+            top = kn[1] - SOCK_BELOW_KNEE            # ハイソックスは膝のすぐ下まで（短いと膝下の肌が長く見えた）
+            SOCK_TOP[g.name] = top
+            cut = lambda Q, d, top=top: np.maximum(d, Q[:, 1] - top)
+            lower = [p for p in legs_src[sd] if any(t in p.tag for t in ("tibia", "gastro", "soleus", "tibialis",
+                                                                          "achilles"))]
+            ng = B.Group(g.name, g.mat, lower + [ankle_cover], k=g.k, inflate=SOCK_SLIM, cut=cut)
             ng.set_xf(np.zeros(3), B.BODY_SCALE, np.zeros(3))
             groups[i] = ng
         if g.name.startswith("sleeve_"):
@@ -541,6 +548,8 @@ def render_base(bob=0.0):
     su_full = np.full(W * H, -1.0)
     su_full[idx] = su
     img = outlines(img, gmap, vz, lvmap, strand.reshape(H, W), mats, groups, su_full.reshape(H, W))
+    neck_shadow(img, gmap, gi, P, Rv)
+    arm_separation(img, gmap, lvmap, gi, groups)
     finger_lines(img, gmap, groups, gi, Ph, idx, gid)
     return dict(img=img, gmap=gmap, vz=vz, names=names, P=P, Rv=Rv, groups=groups, bob=bob, strand=strand.reshape(H, W))
 
@@ -561,7 +570,7 @@ def rebuild_bag_strap(groups, bob):
     g.set_xf(np.zeros(3), BS, np.zeros(3))
     groups[ib] = g
     cloth = [gg for gg in groups if gg.name in ("cardigan", "tee", "skirt", "bag")]
-    a0, a1 = v3(9.4, 120.8 + bob, 0.0), v3(-8.2, 75.4 + bob, 0.0)
+    a0, a1 = v3(11.6, 121.0 + bob, 0.0), v3(-8.2, 75.4 + bob, 0.0)   # 肩の外寄りから（前端と重ならないように）
     sp = []
     zprev = 8.0
     for t in np.linspace(0, 1, 13):
@@ -571,17 +580,22 @@ def rebuild_bag_strap(groups, bob):
         zprev = z
         sp.append(v3(xy[0], xy[1], z + 0.8))
     # 肩の上を越えて背中側へ：最初の点を肩の頂上へ上げ、少し後ろへ
-    sp.insert(0, v3(10.6, 124.2 + bob, -1.6))
+    sp.insert(0, v3(12.4, 123.8 + bob, -2.0))
     gs = B.Group("strap", MAT["strap"], [B.RoundCone(a, b, 0.8, 0.8, "strap") for a, b in zip(sp, sp[1:])], k=0.5)
     gs.set_xf(np.zeros(3), BS, np.zeros(3))
     groups[isp] = gs
+
+
+# 靴の向き：つま先をこちら寄り・少し内向きに（真横を向くと講評で不自然とされた）
+SHOES_HD = (("shoe_w", v3(-3.0, 0.0, -4.6), v3(1.6, 0.0, 14.6)),
+            ("shoe_f", v3(8.0, 5.0, -5.8), v3(9.6, 0.0, 12.8)))
 
 
 def rebuild_shoes(groups):
     """ローファーを作り直す（講評：レンガのような箱に見えた）。
     かかと・甲・つま先の 3 つの楕円をなめらかにつなぎ、つま先は低く丸く、甲は足首へ上がる。靴底は薄く。"""
     names = [g.name for g in groups]
-    for name, heel, toe in B.SHOES:
+    for name, heel, toe in SHOES_HD:
         if name not in names:
             continue
         fwd = nrm(toe - heel)
@@ -592,7 +606,7 @@ def rebuild_shoes(groups):
         Rf = np.stack([side, up, fwd], axis=1)
         prims = [B.Ellipsoid(A(0, 2.7, 2.6), (3.0, 2.7, 2.9), Rf, "shoe_heel"),
                  B.Ellipsoid(A(0, 2.6, Lf * 0.5), (3.3, 2.5, 4.4), Rf, "shoe_body"),
-                 B.Ellipsoid(A(0, 1.9, Lf - 2.7), (3.1, 1.75, 3.0), Rf, "shoe_toe"),
+                 B.Ellipsoid(A(0, 1.9, Lf - 2.5), (3.3, 1.8, 2.6), Rf, "shoe_toe"),   # つま先は丸く（尖るとエルフの靴）
                  B.RoundBox(A(0, 0.55, Lf / 2 - 0.1), (3.3, 0.5, Lf / 2 - 0.3), 0.45, Rf, "sole")]
 
         def shoe_cut(Q, d, heel=heel, up=up, fwd=fwd):
@@ -602,6 +616,39 @@ def rebuild_shoes(groups):
         g = B.Group(name, MAT["shoes"], prims, k=1.8, cut=shoe_cut)
         g.set_xf(np.zeros(3), B.BODY_SCALE, np.zeros(3))
         groups[names.index(name)] = g
+
+
+def neck_shadow(img, gmap, gi, P, Rv):
+    """首の影：顎の線のすぐ下から、顎の形に沿った U 字の落ち影（講評：首に帯を巻いたように見えた）。"""
+    if "torso_skin" not in gi:
+        return
+    _, pit_y, _ = project(B.body_dst(P["neck_pit"]), Rv)
+    rows = np.arange(H)[:, None] < pit_y + 1.0 * RES
+    neck = (gmap == gi["torso_skin"]) & rows
+    face = gmap == gi["face"]
+    near = np.zeros_like(face)
+    d = int(round(NECK_SHADOW * RES))
+    for k in range(1, d + 1):
+        near |= shift(face, 0, -k, False)
+    sk = MAT["skin"]
+    img[neck & ~near, :3] = np.array(sk["base"][:3])
+    img[neck & near, :3] = np.array(sk["s1"][:3])
+    # 影の下の縁に中間色を 1 段
+    edge = neck & ~near & shift(neck & near, 0, -1, False)
+    img[edge, :3] = np.array(mix(sk["s1"], sk["base"], 0.5)[:3])
+
+
+def arm_separation(img, gmap, lvmap, gi, groups):
+    """下ろした腕を胴から分ける：袖が身頃に接する所に 1 段暗い帯（腕の内側の影。講評より）。"""
+    body = gmap == gi.get("cardigan", -99)
+    for side in ("L",):
+        k = gi.get("sleeve_up_" + side), gi.get("sleeve_fore_" + side)
+        sleeve = np.isin(gmap, [x for x in k if x is not None])
+        near = np.zeros_like(body)
+        for dx in range(1, int(1.0 * RES) + 1):
+            near |= shift(body, dx, 0, False) | shift(body, -dx, 0, False)
+        band = sleeve & near & (lvmap <= 2)
+        img[band, :3] = np.array(MAT["cardigan"]["s1"][:3])
 
 
 def finger_lines(img, gmap, groups, gi, Ph, idx, gid):
@@ -683,24 +730,25 @@ def texture_hd(img, idx, Ph, gid, names, lv, P, bob=0.0):
             sd = (Ph - el) @ u
             m = (gid == gi[k]) & (sd > np.linalg.norm(wr - el) - 1.8)
             paint(m & stripe(Ph @ np.cross(u, v3(0, 0, 1))), 1, "cardigan")
-    for k, top in (("socks_w", 27.6), ("socks_f", 29.0)):
-        if k in gi:
+    for k in ("socks_w", "socks_f"):
+        if k in gi and k in SOCK_TOP:
+            top = SOCK_TOP[k]
             m = gid == gi[k]
-            paint(m & (Ph[:, 1] > top - 1.4), 1, "socks")
-            paint(m & (Ph[:, 1] > top - 3.6) & (Ph[:, 1] <= top - 1.4) & stripe(Ph[:, 0] * 1.4), 1, "socks")
-    for k, heel, toe in B.SHOES:
+            paint(m & (Ph[:, 1] > top - 1.2), 1, "socks")                          # 口ゴム：均一な帯
+            paint(m & (Ph[:, 1] > top - 2.4) & (Ph[:, 1] <= top - 2.0), 1, "socks")  # 帯の下の細い線
+    for k, heel, toe in SHOES_HD:
         if k in gi:
             m = gid == gi[k]
             paint(m & (Ph[:, 1] < 1.5), 1, "shoes")                       # 靴底
             fwd = nrm(toe - heel)
             zz = (Ph - heel) @ fwd / np.linalg.norm(toe - heel)          # かかと 0 〜 つま先 1
-            paint(m & (Ph[:, 1] > 2.9) & (np.abs(zz - 0.58) < 0.022), 2, "shoes")  # 甲の帯（サドル）の縫い目：線 1 本
+            paint(m & (Ph[:, 1] > 2.9) & (np.abs(zz - 0.58) < 0.022), -1, "shoes")  # 甲の帯（サドル）：明るい茶の線 1 本
     if "bag" in gi:
         m = gid == gi["bag"]
         q = (Ph - BAG_C0 - v3(0, bob, 0)) @ BAG_R
         edge = 0.2 + 1.5 * (q[:, 0] / 5.2) ** 2                          # フタの下端：中央が一番下がる丸い形
         flap = m & (q[:, 2] > 0.5) & (q[:, 1] > edge)
-        paint(flap, -1, "bag")
+        paint(flap, 0, "bag")
         paint(m & (q[:, 2] > 0.5) & (np.abs(q[:, 1] - edge) < 0.28), 2, "bag")     # フタの縁の線
 
 
@@ -725,11 +773,15 @@ def grade(img, gmap):
 GRADMAP = 0.12              # グラデーションマップの強さ
 FACE_SHADOW_Y = 16.0        # 顔に落ち影を入れるのはこの高さ（頭の座標）より上＝額だけ
 SOCK_SLIM = -0.35
+SOCK_BELOW_KNEE = 4.5       # 靴下の上端：膝の中心からこれだけ下
+SOCK_TOP = {}
+NECK_SHADOW = 2.4           # 顎の下の影の深さ（単位：v8 の 1px）
 NECK_R = (3.5, 3.2)         # 首の太さ（v8 は 4.1, 3.7）
 FACE_K = 4.6                # 顔の部品のつなぎ目の幅（v8 は 3.0）
 LEG_SLIM = -0.45            # 脚を細くする量（距離関数を内側へずらす）
 HEAD_DOWN = -1.4             # 頭を下げる量（首を短く）
-HD_HEAD_TILT = -3.5          # 首かしげ（度）。v8 は -6
+HD_HEAD_YAW = 13.0          # 顔を体よりこちらへ向ける角度（v8 は 9）
+HD_HEAD_TILT = -1.5          # 首かしげ（度）。v8 は -6
 HD_HEAD_SCALE, HD_BODY_SCALE = 1.14, 0.88   # 頭 1.14 倍・首から下 0.88 倍 → 約 4.5 頭身
 HAIR_UNIFY = True           # 髪の一体感：前髪・横髪・後ろ髪を同じ塗りと弱い境目でひとまとまりに（docs/15 15-12）
 HAIR_SPHERE = 0.7           # 髪の法線を球の法線へ寄せる割合
@@ -1000,7 +1052,7 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes, groups):
         icx, icy, irx, iry = ex - side * 0.1, ey - 0.3, 2.6, 3.15
         u, v = (X - icx) / irx, (Y - icy) / iry
         iris = inside & (u * u + v * v < 1.0)
-        tt = v
+        tt = v - 0.3 * u * u        # 色の境目は瞳の丸みに沿った弧に（水平だと縞に見えた）
         paint(iris, EYE_C["iris"], 0.85)
         # 色の境目に中間色を 1 段（3 色の帯が縞に見えないように：講評より）
         paint(iris & (tt > 0.28), mix(EYE_C["iris"], EYE_C["iris_acc"], 0.5), 0.85)
@@ -1129,11 +1181,14 @@ def draw_accessories(img, gmap, names, P, Rv, bob):
         x, y, _ = pj(TX((5.6, yb, 9.6)))
         stamp(img, gmap, x, y, ["hb", "bb"], {"b": ACC["button"], "h": hx("#e8d8c0")}, ids("cardigan"))
     # T シャツのハート
-    x, y, _ = pj(TX((-3.6, 104.5, 8.6)))
+    x, y, _ = pj(TX((-1.8, 104.2, 9.0)))     # 前端で切れないよう中央寄り
     stamp(img, gmap, x, y, TEE_HEART, {"h": MAT["bag"]["base"]}, ids("tee"))
     # バッグの金具
     x, y, _ = pj(BAG_C0 + v3(0, bob, 0) + BAG_R @ v3(0, 0.2, 3.3))          # フタの先の留め金
     stamp(img, gmap, x, y, [".gg.", "gGGg", ".gg."], {"g": ACC["gold"], "G": hx("#fff0b0")}, ids("bag"))
+    # 紐の付け根の D カン
+    x, y, _ = pj(v3(-8.2, 75.6 + bob, 10.6))
+    stamp(img, gmap, x, y, ["gg", "gG"], {"g": ACC["gold"], "G": hx("#c89a40")}, ids("bag", "strap"))
     # 膝・肘の血色（肌より少し赤い小さな楕円）
     yy, xx = np.mgrid[0:H, 0:W]
     for side, leg in (("L", "leg_w"), ("R", "leg_f")):
