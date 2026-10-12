@@ -207,6 +207,8 @@ ROUND_FACE = 0.0               # 顔の丸さ 0（v6）〜 1（v7：円で組み
 SIDE_LOCK_OUT = 0.0            # 横髪を外へずらす量（v7：丸い頬を隠さない）
 BANG_UP = 0.0                  # 前髪の毛先を上げる量（v7：おでこを広く）
 SIMPLE = False                 # 単純化＋ドットの手直し（v8、docs/14）
+TEE_NECK = (5.6, 3.6, 6.5)     # T シャツの首まわりの穴（半径）
+CARD_NECK = (6.2, 4.4, 7.5)    # カーディガンの首まわりの穴（半径）
 
 # 絵柄のプリセット（比較用）。v7 は『メイドインアビス』の比率の研究（docs/13）を反映した版
 PRESETS = {
@@ -483,7 +485,7 @@ def build_scene(bob=0.0, anatomy=False):
         neck_c, _ = TX((0, 121.0, 3.2))
 
         def tee_cut(Q, d):
-            q = (Q - neck_c) / np.array([5.6, 3.6, 6.5])
+            q = (Q - neck_c) / np.array(TEE_NECK)
             hole = (np.linalg.norm(q, axis=1) - 1.0) * 3.4
             return np.maximum(d, -hole)
 
@@ -529,7 +531,7 @@ def build_scene(bob=0.0, anatomy=False):
             w = np.clip(2.0 + (18.0 - yy) * 0.11, 2.0, 6.5)                       # 前開き：下ほど広い
             wedge = np.maximum(np.abs(ql[:, 0] + 0.4) - w, 3.2 - ql[:, 2])
             d = np.maximum(d, -wedge)
-            nq = (Q - TX((0, 120.5, 1.0))[0]) / np.array([6.2, 4.4, 7.5])
+            nq = (Q - TX((0, 120.5, 1.0))[0]) / np.array(CARD_NECK)
             d = np.maximum(d, -(np.linalg.norm(nq, axis=1) - 1.0) * 4.0)          # 首まわり
             return d
 
