@@ -413,6 +413,43 @@
     }
   }
   G.C45.coreParallax = coreParallax;
+  // ライティングの後に描く：奈落の奥の光（スターシードの気配）と、巡回の視界
+  function corePost(c, ox, oy, f) {
+    const m = G.field.map;
+    c.save();
+    c.beginPath();
+    const x0 = Math.max(0, Math.floor(-ox / S)),
+      y0 = Math.max(0, Math.floor(-oy / S));
+    for (let y = y0; y < Math.min(m.h, y0 + 19); y++) for (let x = x0; x < Math.min(m.w, x0 + 32); x++) if (m.grid[y][x] === ' ') c.rect(x * S + ox, y * S + oy, S, S);
+    c.clip();
+    c.globalCompositeOperation = 'lighter';
+    const cx = G.W / 2 - G.field.cam.x * 0.04 + 100,
+      cy = G.H / 2 - G.field.cam.y * 0.04 + 20;
+    for (let i = 0; i < 5; i++) {
+      const rr = 18 + i * 34 + ((f * 0.15) % 34);
+      c.fillStyle = `rgba(110,150,255,${0.22 - i * 0.04})`;
+      const n = 40 + i * 14;
+      for (let k = 0; k < n; k++) {
+        const t = (k / n) * Math.PI * 2 + f * 0.002 * (i % 2 ? 1 : -1);
+        c.fillRect(Math.round(cx + Math.cos(t) * rr * 1.7), Math.round(cy + Math.sin(t) * rr * 0.55), 2, 1);
+      }
+    }
+    G.glow(c, cx, cy, 52 + Math.sin(f * 0.03) * 6, 'rgba(160,240,255,0.30)');
+    G.glow(c, cx, cy, 16, 'rgba(255,255,255,0.45)');
+    c.restore();
+    // 巡回の視界（暗い区画では本体の描画だと見えにくいので重ねて描く）
+    for (const e of G.field.enemies()) {
+      if (!e.patrol) continue;
+      const [fx, fy] = G.DIRS[e.dir];
+      const a0 = Math.atan2(fy, fx);
+      c.fillStyle = e.spotted ? 'rgba(255,40,70,0.30)' : 'rgba(255,220,90,0.20)';
+      c.beginPath();
+      c.moveTo(e.x + ox, e.y - 6 + oy);
+      c.arc(e.x + ox, e.y - 6 + oy, e.vision, a0 - 0.6, a0 + 0.6);
+      c.closePath();
+      c.fill();
+    }
+  }
   G.defMap('c5_core', {
     name: 'コア・シャフト',
     area: '回転軸・無重力区画',
@@ -425,14 +462,7 @@
     pal: { metal: '#6a7090', block: '#1a1a2a' },
     rows: CO.rows(),
     parallax: coreParallax,
-    post: (c, ox, oy, f) => {
-      c.globalCompositeOperation = 'lighter';
-      const cx = G.W / 2 - G.field.cam.x * 0.04 + 100,
-        cy = G.H / 2 - G.field.cam.y * 0.04 + 20;
-      G.glow(c, cx, cy, 46 + Math.sin(f * 0.03) * 6, 'rgba(160,240,255,0.22)');
-      G.glow(c, cx, cy, 14, 'rgba(255,255,255,0.35)');
-      c.globalCompositeOperation = 'source-over';
-    },
+    post: (c, ox, oy, f) => corePost(c, ox, oy, f),
     objects: [
       { p: 'c5_lift', x: 3, y: 12, open: true },
       { p: 'crate', x: 8, y: 12 },
