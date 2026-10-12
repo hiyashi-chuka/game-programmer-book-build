@@ -201,7 +201,7 @@ checks: [ { x: 3, y: 2, msg: '「本日休業」の札がかかっている。' 
           { x: 7, y: 2, run: async () => { ... }, show: () => true } ],
 ```
 
-### 1.7 敵 `enemies` / アイテム `items` / 光源 `lights`
+### 1.7 敵 `enemies` / アイテム `items`（`onPick: async()=>{}` で拾った時の処理） / 光源 `lights`
 ```js
 enemies: [ { type: 'rat', x: 20, y: 8, lv: 2, id: 'boss1' /*id付きは一度倒すと復活しない*/, show: () => ... } ],
 items:   [ { x: 3, y: 4, item: 'memory', n: 1, id: 'mem_minato_1' } ],   // 拾うまで残る（キラキラ）

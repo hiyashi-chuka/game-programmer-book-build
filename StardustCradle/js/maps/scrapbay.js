@@ -448,6 +448,16 @@
       { p: 'barrel', x: 28, y: 24, hazard: true },
     ],
     decorate(c, m) {
+      for (let i = 0; i < 120; i++) {
+        const x = 20 + Math.floor(G.hash(i, 21, 3) * 600),
+          y = 20 + Math.floor(G.hash(i, 22, 3) * 400);
+        const k = G.hash(i, 23, 3);
+        if (k < 0.35) G.ellipse(c, x, y, 4 + Math.floor(k * 18), 2 + Math.floor(k * 5), 'rgba(40,34,44,0.25)');
+        else if (k < 0.75) {
+          r(c, x, y, 3, 2, ['#8a92a6', '#a86a4a', '#c0a040', '#5a6070'][i % 4]);
+          px(c, x, y, '#d0d4e0');
+        } else G.line(c, x, y, x + 6, y + 2, '#7a7e8e');
+      }
       // 機体の足跡と焦げ跡
       for (let i = 0; i < 18; i++) {
         const x = 80 + Math.floor(G.hash(i, 1, 4) * 480),

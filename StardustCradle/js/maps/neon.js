@@ -281,6 +281,14 @@
   G.mob('w2_courier', '配達少年ビン', 214, { girl: false, old: false, kid: true, over: { outfit: 'jacket', top: '#ffd25e', top2: '#2a2a3a', acc: ['cap'], accCol: '#e04a4a' } });
   G.mob('w2_cleaner', '清掃ロボの番人ガンジ', 212, { girl: false, old: true, over: { outfit: 'jumpsuit', top: '#e08a30', bottom: '#4a4a5a', acc: ['helmet'], accCol: '#ffd25e' } });
 
+  W2.stall_tako = stallTalk('w2_tako', () => G.byCh({ 0: 'へいらっしゃい！　コロニー名物、合成ダコのたこ焼きだ！　……本物のタコ？　見たことねえな！', 5: '外出制限の前に食ってきな！　腹が減っては、なんとやらだ。', 8: 'こんな夜こそ、熱々のたこ焼きだ！　お代はいらねえ……とは言えねえが、安くしとくぜ！' }), ['onigiri', 'soda'], 'たこ焼き〈ゲンジ〉');
+  W2.stall_candy = stallTalk('w2_candy', () => G.byCh({ 0: 'いらっしゃーい☆　光るネオンキャンディ、なめると舌が光るよ！', 2: '白い髪の女の子が、キャンディを10本も買ってったの！　かわいかった〜☆', 9: 'ニコちゃん、今日も来てくれたよ！　常連さん第1号☆' }), ['candy', 'soda', 'energy'], 'ネオンキャンディ〈ポップ〉');
+  W2.stall_donut0 = stallTalk('w2_donut', () => G.byCh({ 0: 'ハロー！　マルコのドーナツ、宇宙一ふわふわ！　限定の「ネオン・リング」は1日10個だけね！', 5: '限定ドーナツ？　材料が届かなくて、作れない日もあるんだ……。', 9: '新作「ほんとうの空ドーナツ」！　青いアイシングがポイントさ！' }), ['melonpan', 'candy', 'soda'], 'マルコのドーナツ');
+  W2.stall_onigiri = stallTalk('w2_onigiri', () => G.byCh({ 0: 'おにぎりあるよ。具はシャケ……の味がする何か。おいしいのは保証するよ。', 3: 'デュエル帰りの子たちがよく買っていくのさ。腹ペコの機体乗りには、米が一番！', 7: 'こんな時でも店は開けるよ。避難する人の腹を満たすのが、あたしの仕事さ。' }), ['onigiri', 'soda', 'energy'], 'おにぎり〈サチ〉');
+  W2.stall_donut = async function () {
+    if (W2.donutQuest && (await W2.donutQuest())) return;
+    await W2.stall_donut0();
+  };
   W2.uranai = async function () {
           if (await W2.rumor(2, 'w2_uranai', 'ピピ……七不思議ノ データ ヲ 検索。……「ネオン通リノ 占イロボハ 未来ノ 日付ヲ 口ニスル」。……ソレ、ワタシ デス。S.C.0091。……ナゼカ 時々 ソノ数字ガ 出力 サレマス。')) return;
           await W2.lines('w2_uranai', {
@@ -350,10 +358,10 @@
       { p: 'neonsign', x: 51, y: 11, text: 'ON AIR', col: '#ff3050' },
       { p: 'w2_fortune', x: 34, y: 9, talk: async () => await W2.uranai() },
       // 屋台（北の歩道）
-      { p: 'stall', x: 3, y: 13, text: 'TAKOYAKI', col: '#c03a3a', talk: stallTalk('w2_tako', () => G.byCh({ 0: 'へいらっしゃい！　コロニー名物、合成ダコのたこ焼きだ！　……本物のタコ？　見たことねえな！', 5: '外出制限の前に食ってきな！　腹が減っては、なんとやらだ。', 8: 'こんな夜こそ、熱々のたこ焼きだ！　お代はいらねえ……とは言えねえが、安くしとくぜ！' }), ['onigiri', 'soda'], 'たこ焼き〈ゲンジ〉') },
-      { p: 'stall', x: 16, y: 13, text: 'CANDY', col: '#ff5fa2', talk: stallTalk('w2_candy', () => G.byCh({ 0: 'いらっしゃーい☆　光るネオンキャンディ、なめると舌が光るよ！', 2: '白い髪の女の子が、キャンディを10本も買ってったの！　かわいかった〜☆', 9: 'ニコちゃん、今日も来てくれたよ！　常連さん第1号☆' }), ['candy', 'soda', 'energy'], 'ネオンキャンディ〈ポップ〉') },
-      { p: 'stall', x: 25, y: 13, text: 'DONUT', col: '#d0902a', talk: stallTalk('w2_donut', () => G.byCh({ 0: 'ハロー！　マルコのドーナツ、宇宙一ふわふわ！　限定の「ネオン・リング」は1日10個だけね！', 5: '限定ドーナツ？　材料が届かなくて、作れない日もあるんだ……。', 9: '新作「ほんとうの空ドーナツ」！　青いアイシングがポイントさ！' }), ['melonpan', 'candy', 'soda'], 'マルコのドーナツ') },
-      { p: 'stall', x: 47, y: 13, text: 'ONIGIRI', col: '#4a6a9a', talk: stallTalk('w2_onigiri', () => G.byCh({ 0: 'おにぎりあるよ。具はシャケ……の味がする何か。おいしいのは保証するよ。', 3: 'デュエル帰りの子たちがよく買っていくのさ。腹ペコの機体乗りには、米が一番！', 7: 'こんな時でも店は開けるよ。避難する人の腹を満たすのが、あたしの仕事さ。' }), ['onigiri', 'soda', 'energy'], 'おにぎり〈サチ〉') },
+      { p: 'stall', x: 3, y: 13, text: 'TAKOYAKI', col: '#c03a3a', talk: async () => await W2.stall_tako() },
+      { p: 'stall', x: 16, y: 13, text: 'CANDY', col: '#ff5fa2', talk: async () => await W2.stall_candy() },
+      { p: 'stall', x: 25, y: 13, text: 'DONUT', col: '#d0902a', talk: async () => await W2.stall_donut() },
+      { p: 'stall', x: 47, y: 13, text: 'ONIGIRI', col: '#4a6a9a', talk: async () => await W2.stall_onigiri() },
       // 南側（裏口は路地裏向き）
       sbld(0, 7, { sign: 'MANGA', signCol: '#141020', signText: '#ffd25e', door: 3, msg: '漫画喫茶〈コミック・ネビュラ〉の裏口。「関係者以外立入禁止」' }),
       sbld(9, 12, { sign: 'BOWLING', signCol: '#141020', signText: '#4ef0ff', door: 5, msg: 'ボウリング場〈ストライク・ムーン〉の裏口。ピンの倒れる音が響いてくる。' }),
@@ -416,10 +424,10 @@
       }
     },
     npcs: [
-      { id: 'w2_tako', char: 'w2_tako', x: 4, y: 12, dir: 'down', move: 'still', noFace: true, talk: async () => await E.say('w2_tako', 'お客さん、注文は屋台の前からたのむぜ！') },
-      { id: 'w2_candy', char: 'w2_candy', x: 17, y: 12, dir: 'down', move: 'still', show: W2.town, talk: async () => await E.say('w2_candy', 'キャンディは屋台の正面からどうぞ☆') },
-      { id: 'w2_donut', char: 'w2_donut', x: 26, y: 12, dir: 'down', move: 'still', show: W2.town, talk: async () => await E.say('w2_donut', 'オーダーは前からね！　ドーナツは逃げないよ……限定品以外は！') },
-      { id: 'w2_onigiri', char: 'w2_onigiri', x: 48, y: 12, dir: 'down', move: 'still', talk: async () => await E.say('w2_onigiri', 'はいはい、前に回っておくれ。') },
+      { id: 'w2_tako', char: 'w2_tako', x: 4, y: 12, dir: 'down', move: 'still', noFace: true, talk: async () => await W2.stall_tako() },
+      { id: 'w2_candy', char: 'w2_candy', x: 17, y: 12, dir: 'down', move: 'still', show: W2.town, talk: async () => await W2.stall_candy() },
+      { id: 'w2_donut', char: 'w2_donut', x: 26, y: 12, dir: 'down', move: 'still', show: W2.town, talk: async () => await W2.stall_donut() },
+      { id: 'w2_onigiri', char: 'w2_onigiri', x: 48, y: 12, dir: 'down', move: 'still', talk: async () => await W2.stall_onigiri() },
       {
         id: 'w2_musician', char: 'w2_musician', x: 26, y: 19, dir: 'down', move: 'still', show: W2.town,
         talk: async () => {

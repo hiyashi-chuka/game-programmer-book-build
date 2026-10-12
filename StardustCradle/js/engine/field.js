@@ -102,7 +102,7 @@
       const fl = 'item_' + id + '_' + (it.id || it.x + '_' + it.y);
       if (G.state.flags[fl]) return;
       if (it.show && !it.show()) return;
-      F.ents.push(new G.Pickup({ x: it.x * 16 + 8, y: it.y * 16 + 12, kind: 'item', item: it.item, n: it.n || 1, flag: fl, persistent: true }));
+      F.ents.push(new G.Pickup({ x: it.x * 16 + 8, y: it.y * 16 + 12, kind: 'item', item: it.item, n: it.n || 1, flag: fl, persistent: true, onPick: it.onPick }));
     });
     F.lastTile = [p.tx, p.ty];
     F.arrivalTile = [p.tx, p.ty];

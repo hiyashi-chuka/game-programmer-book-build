@@ -921,6 +921,7 @@
         G.audio.se('pickup');
         G.ui.toast(G.ITEMS[this.item].name + (this.n > 1 ? ' ×' + this.n : '') + ' を手に入れた', '#7af8ff');
         if (this.flag) G.state.flags[this.flag] = true;
+        if (this.onPick) G.ev.run(() => this.onPick(this));
       }
     }
     draw(c, ox, oy) {
