@@ -26,7 +26,11 @@
   G.ENEMIES.c2_mimi = { name: 'ミミ', hp: 999, atk: 0, def: 0, exp: 0, money: 0, spd: 1.15, ai: 'patrol', spr: () => G.charSheet(G.chars.mimi.spr) };
 
   // ---------- 小さなヘルパー ----------
-  const put = (id, char, x, y, dir, extra) => E.npc(Object.assign({ id, char, x, y, dir: dir || 'down', move: 'still' }, extra || {}));
+  // 同じIDのNPCがいれば置き換える（戦闘後にエンジンが復元したNPCとの重複を防ぐ）
+  const put = (id, char, x, y, dir, extra) => {
+    for (let i = 0; i < 8 && E.get(id); i++) E.remove(id);
+    return E.npc(Object.assign({ id, char, x, y, dir: dir || 'down', move: 'still' }, extra || {}));
+  };
   const del = (...ids) => ids.forEach((id) => E.remove(id));
   async function goOut(id, path) {
     await E.move(id, path);
@@ -1361,7 +1365,7 @@
     await E.say('kanata:grin', '……悪いやつじゃ、なさそうだな。');
     await E.say('kanata:surprise', 'あ、やべ！　ばあちゃんの店の手伝い！　今日は混むって言われてたんだ！');
     E.exp(150);
-    del('c2_ruu', 'c2_niko');
+    del('c2_ruu', 'c2_niko', 'c2_goon1', 'c2_goon2', 'c2_kyo');
     E.party(['ruu', 'niko']);
     setStep(13);
     E.cut(false);

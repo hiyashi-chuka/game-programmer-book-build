@@ -587,6 +587,7 @@
       let guard = 0;
       while (guard++ < 200) {
         const ev = tr.events[st.idx[ti]];
+        if (!ev) break; // ループしない曲が終わった
         const time = st.start + (ev.t + st.loopN[ti] * L) * st.spb;
         if (time > ahead) break;
         if (time >= ctx.currentTime - 0.05) {

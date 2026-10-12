@@ -13,7 +13,11 @@
   const step = () => E.val('c3_step');
   const at = (n) => C3() && step() === n;
   const setStep = (n) => E.set('c3_step', n);
-  const put = (id, char, x, y, dir, extra) => E.npc(Object.assign({ id, char, x, y, dir: dir || 'down', move: 'still' }, extra || {}));
+  // 同じIDのNPCがいれば置き換える（戦闘後にエンジンが復元したNPCとの重複を防ぐ）
+  const put = (id, char, x, y, dir, extra) => {
+    for (let i = 0; i < 8 && E.get(id); i++) E.remove(id);
+    return E.npc(Object.assign({ id, char, x, y, dir: dir || 'down', move: 'still' }, extra || {}));
+  };
   const del = (...ids) => ids.forEach((id) => E.remove(id));
   async function goOut(id, path) {
     await E.move(id, path);
