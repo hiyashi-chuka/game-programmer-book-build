@@ -222,6 +222,15 @@ def draw(img, gmap, names, P, Rv, D):
     # 帯のすぐ下に細い影（輪が目立つ）
     under = hair & sh(band, 0, -max(1, RES // 2)) & ~band & core_top & ~shadow
     out[under] = col["s1"] * 0.6 + col["base"] * 0.4
+    # 4b. 細かいツヤの筋：光の側の束の中ほどに、束に沿った細い明るい筋（大きなツヤと細かいツヤの 2 種類：プロの描き方）
+    for i, (kind, layer, pts, *w) in enumerate(clumps):
+        if pts == "fill" or not (kind.startswith("bob") or kind.startswith("side") or kind == "bang"):
+            continue
+        cx = np.mean([p[0] for p in pts])
+        if cx > 2.0:                       # 光は左上：画面左側の束だけ
+            continue
+        streak = pt.mask(stroke(pts, w[0], scale=0.16, t0=0.32, t1=0.62)) & (top == i) & ~shadow
+        out[streak] = out[streak] * 0.45 + col["lt"] * 0.55
     # 5. 毛先：明るく抜く（前髪の先は肌が透ける）
     tip_top = np.zeros_like(hair)
     for i, t in enumerate(tips):
