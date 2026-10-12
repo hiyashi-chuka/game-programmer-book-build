@@ -16,7 +16,8 @@ import math
 import numpy as np
 from PIL import Image, ImageDraw
 
-CAP_RX, CAP_RY = 16.5, 15.0             # 髪全体の外形（頭頂 ≒ 32.8）
+CAP_RX, CAP_RY = 15.6, 15.8             # 髪全体の外形（頭頂 ≒ 32.8）
+BOB_NARROW = 0.93                       # 横の膨らみを細くする倍率
 SHELL_C = np.array([0.0, 17.5, -1.2])   # 髪の殻（頭を包む球）の中心
 SHELL_R = 16.8
 
@@ -154,8 +155,13 @@ def draw(img, gmap, names, P, Rv, D):
     face0 = gmap == fid
 
     clumps = design(D)
+    # 頭が肩より大きく見えないよう、横の膨らみを少し細く（講評：キノコ・ヘルメット型）
+    clumps = [(k, l, [(x * BOB_NARROW, y) for x, y in pts] if (k.startswith("bob") or k == "base" or k == "inner")
+               and pts != "fill" else pts, *w) if pts != "fill" else
+              (k, l, pts, [(x * BOB_NARROW, y) if (k == "base" and y < 17.8) or k == "inner" else (x, y)
+                           for x, y in w[0]]) for (k, l, pts, *w) in clumps]
     cap_mask = pt.mask([(CAP_RX * math.cos(a), 17.8 + CAP_RY * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 48)])
-    bob_clip = pt.mask([(19.5 * math.cos(a), 15.5 + 17.3 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 64)]) \
+    bob_clip = pt.mask([(18.6 * math.cos(a), 15.5 + 18.1 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 64)]) \
         | pt.mask([(-30.0, 15.5), (30.0, 15.5), (30.0, -15.0), (-30.0, -15.0)])   # 上半分だけ丸く切る
     top = np.full((H, W), -1)          # 一番手前の束の番号
     masks, cores, tips, kinds = [], [], [], []
@@ -208,6 +214,11 @@ def draw(img, gmap, names, P, Rv, D):
     out[deep] = col["s2"]
     inner = hair & (np.array(kinds, dtype=object)[np.clip(top, 0, None)] == "inner")
     out[inner] = inner_c
+    # 頭頂の明るい面：球の上の面は光を受けて明るい（3 段の明暗で球に見せる：講評より）
+    crown_lit = pt.mask([(x, 24.4 - 0.022 * x * x + 0.9) for x in np.linspace(-15, 15, 31)] +
+                        [(CAP_RX * math.cos(a), 17.8 + CAP_RY * math.sin(a)) for a in np.linspace(0.15, math.pi - 0.15, 25)][::-1])
+    cl = crown_lit & hair & ~shadow & ~sh(hair, 3 * RES, -0 * RES, False)
+    out[cl] = out[cl] * 0.6 + col["lt"] * 0.4
     # 4. ツヤ（天使の輪）：頭の丸みに沿った帯 × 束の芯、光の側だけ
     ring_poly = [(x, 24.4 - 0.022 * x * x + 0.9) for x in np.linspace(-15, 9, 30)] + \
                 [(x, 24.4 - 0.022 * x * x - 0.9) for x in np.linspace(9, -15, 30)]
@@ -240,7 +251,7 @@ def draw(img, gmap, names, P, Rv, D):
     outer = np.zeros_like(hair)
     innerl = np.zeros_like(hair)
     crown_ids = [i for i, c in enumerate(clumps) if c[0] == "crown"]
-    bang_ids = [i for i, c in enumerate(clumps) if c[0] == "bang"]
+    bang_ids = [i for i, c in enumerate(clumps) if c[0] in ("bang", "ahoge")]
     top_region = pt.mask([(-20.0, 26.8), (20.0, 26.8), (20.0, 40.0), (-20.0, 40.0)])
     bob_ids = [i for i, c in enumerate(clumps) if c[0].startswith("bob")]
     upper7 = pt.mask([(-26.0, 7.0), (26.0, 7.0), (26.0, 40.0), (-26.0, 40.0)])
