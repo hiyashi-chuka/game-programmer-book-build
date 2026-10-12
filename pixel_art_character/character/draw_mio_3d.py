@@ -203,16 +203,20 @@ PITCH = math.radians(5.0)       # 少し上から見下ろす
 HEAD_SCALE = 1.06              # 頭を 1.06 倍（約5.0頭身）。大きな頭は可愛さの要素だが、1.1 倍では頭でっかちになった（docs/12）
 BODY_SCALE = 0.94              # 首から下を 0.94 倍（小柄に。頭と目の大きさは変えない。docs/12）
 ANIME_SMOOTH = 3.0              # 筋肉どうしをつなぐ幅（1.5 で写実寄り、3〜4 でアニメ寄り。docs/10 10-5）
-ROUND_FACE = False             # True：丸く横に広い顔（v7）
+ROUND_FACE = 0.0               # 顔の丸さ 0（v6）〜 1（v7：円で組み立てた横に広い顔）
 SIDE_LOCK_OUT = 0.0            # 横髪を外へずらす量（v7：丸い頬を隠さない）
 BANG_UP = 0.0                  # 前髪の毛先を上げる量（v7：おでこを広く）
+SIMPLE = False                 # 単純化＋ドットの手直し（v8、docs/14）
 
 # 絵柄のプリセット（比較用）。v7 は『メイドインアビス』の比率の研究（docs/13）を反映した版
 PRESETS = {
-    "v6": dict(HEAD_SCALE=1.06, BODY_SCALE=0.94, ANIME_SMOOTH=3.0, ROUND_FACE=False, FACE_STYLE="modern",
-               SIDE_LOCK_OUT=0.0, BANG_UP=0.0),
-    "v7": dict(HEAD_SCALE=1.08, BODY_SCALE=0.88, ANIME_SMOOTH=4.0, ROUND_FACE=True, FACE_STYLE="round",
-               SIDE_LOCK_OUT=1.8, BANG_UP=2.2),
+    "v6": dict(HEAD_SCALE=1.06, BODY_SCALE=0.94, ANIME_SMOOTH=3.0, ROUND_FACE=0.0, FACE_STYLE="modern",
+               SIDE_LOCK_OUT=0.0, BANG_UP=0.0, EYE_X=7.3, SIMPLE=False),
+    "v7": dict(HEAD_SCALE=1.08, BODY_SCALE=0.88, ANIME_SMOOTH=4.0, ROUND_FACE=1.0, FACE_STYLE="round",
+               SIDE_LOCK_OUT=1.8, BANG_UP=2.2, EYE_X=7.3, SIMPLE=False),
+    # v8：v7 はやりすぎ（目が離れすぎ・目が単純すぎ・体が小さすぎ）だったため、v6 を土台に少しだけ丸く
+    "v8": dict(HEAD_SCALE=1.06, BODY_SCALE=0.94, ANIME_SMOOTH=3.0, ROUND_FACE=0.4, FACE_STYLE="modern",
+               SIDE_LOCK_OUT=0.8, BANG_UP=1.0, EYE_X=7.6, SIMPLE=True),
 }
 
 
@@ -393,27 +397,25 @@ def face_prims(P):
     L = lambda x, y, z: o + Rh @ v3(x, y, z)
     # 顔の輪郭（docs/11 11-2）：頭蓋は横にやや広い球、頬は目の下で一番広く、
     # そこから顎先へ「なめらかな V」で細くなる。顎の角（えら）は作らない
-    if ROUND_FACE:
-        # v7（docs/13）：円で組み立てた顔。頭蓋は横に広い球、頬は大きく丸く、顎はほとんど尖らない。
-        # 顔の幅 ≒ 頭の高さ、顔の下半分は小さい
-        out = [
-            Ellipsoid(L(0, 17.5, -1.0), (14.3, 13.4, 13.4), Rh, "cranium"),
-            Ellipsoid(L(0, 10.0, 2.4), (13.0, 7.6, 10.0), Rh, "cheek"),
-            Ellipsoid(L(0, 3.4, 5.0), (5.0, 2.8, 3.2), Rh, "chin"),
-        ]
+    # ROUND_FACE（0〜1）で v6 の顔と v7 の「円で組み立てた顔」（docs/13）の間をなめらかに変える
+    t = ROUND_FACE
+    lp = lambda a, b: tuple(x * (1 - t) + y * t for x, y in zip(a, b))
+    out = [
+        Ellipsoid(L(0, 17.5, -1.0), lp((13.7, 13.3, 13.3), (14.3, 13.4, 13.4)), Rh, "cranium"),
+        Ellipsoid(L(*lp((0, 10.4, 2.4), (0, 10.0, 2.4))), lp((12.2, 7.0, 9.6), (13.0, 7.6, 10.0)), Rh, "cheek"),
+        Ellipsoid(L(*lp((0, 2.9, 5.4), (0, 3.4, 5.0))), lp((3.8, 2.4, 2.9), (5.0, 2.8, 3.2)), Rh, "chin"),
+    ]
+    if t >= 1.0:
         for s in (-1, 1):
             out.append(RoundCone(L(s * 10.0, 8.4, 2.6), L(s * 2.6, 3.2, 5.0), 3.6, 3.0, "jaw"))
         return out
-    out = [
-        Ellipsoid(L(0, 17.5, -1.0), (13.7, 13.3, 13.3), Rh, "cranium"),
-        Ellipsoid(L(0, 10.4, 2.4), (12.2, 7.0, 9.6), Rh, "cheek"),      # v6：頬をふっくら（ベビースキーマ）
-        Ellipsoid(L(0, 2.9, 5.4), (3.8, 2.4, 2.9), Rh, "chin"),          # 顎先は小さく丸く（V → U 寄り）
-    ]
     for s in (-1, 1):
         # 頬骨：3/4 向きで奥の輪郭の「目の下の外側」に小さなふくらみを作る
         out.append(Ellipsoid(L(s * 8.4, 11.4, 7.8), (2.6, 2.0, 2.0), Rh, "cheekbone"))
         # 顎のライン：頬から顎先へ細くなる円錐
-        out.append(RoundCone(L(s * 9.2, 8.6, 2.6), L(s * 1.8, 2.9, 5.4), 3.2, 2.6, "jaw"))
+        j0, j1 = lp((9.2, 8.6, 2.6), (10.0, 8.4, 2.6)), lp((1.8, 2.9, 5.4), (2.6, 3.2, 5.0))
+        r0, r1 = lp((3.2, 2.6), (3.6, 3.0))
+        out.append(RoundCone(L(s * j0[0], j0[1], j0[2]), L(s * j1[0], j1[1], j1[2]), r0, r1, "jaw"))
     return out
 
 
@@ -854,12 +856,20 @@ def render(bob=0.0, eyes="open", anatomy=False, yaw=BODY_YAW, face_details=True)
     th = np.where(is_hair, 4.2, 2.6)    # 髪は束の溝が多いので、オクルージョンを弱めて暗くなりすぎないように
     lv[(occ > th) & ~noao] = np.minimum(lv[(occ > th) & ~noao] + 1, 4)
 
+    if SIMPLE:
+        # 単純化（docs/14）：アニメ化で線と色分けを減らすのと同じ考え方で、計算で出る細かな明暗を整理する
+        fi_ = names.index("face")
+        mf = gid == fi_
+        lv[mf] = np.where(lit[mf], 2, 3)             # 顔はベタ。前髪・横髪の落ち影（1影）だけ残す
+        lv[is_hair] = np.where(lv[is_hair] <= 2, 2, 3)  # 髪はベース・影の2段階（＋天使の輪）
+        lv[(lv == 4) & ~deep] = 3                     # 2影は光が届かない深い所だけ
+
     # 髪：鏡面反射のハイライト＝天使の輪（毛束の溝で自然に途切れる）
     hi_ = names.index("hair")
     mh = gid == hi_
     Hh = nrm(Lm + Vm)
     spec = (N @ Hh) ** 24
-    ring = mh & (spec > 0.45) & lit
+    ring = mh & (spec > (0.3 if SIMPLE else 0.45)) & lit
     lv[ring] = np.maximum(lv[ring] - 2, 0)
     # インナーカラー：ボブの内側（首に近い面）
     Rh = head_frame(P)
@@ -903,6 +913,8 @@ def render(bob=0.0, eyes="open", anatomy=False, yaw=BODY_YAW, face_details=True)
     vz[gmap < 0] = -1e9
     lvmap = lv_full.reshape(H, W)
     img = outlines(img, gmap, vz, lvmap, mats, groups, anatomy)
+    if SIMPLE and not anatomy:
+        img = cleanup(img, gmap)
 
     if face_details and not anatomy:
         draw_face(img, gmap, vz, names, P, Rv, eyes)
@@ -911,6 +923,28 @@ def render(bob=0.0, eyes="open", anatomy=False, yaw=BODY_YAW, face_details=True)
 
 
 HAIR_JUMP = 5.0   # 髪の中の輪郭線は深さが大きく飛ぶ所（束が手前に重なる所）だけ：線を減らしてアニメらしく
+
+
+def cleanup(img, gmap):
+    """ドット絵の手直しを自動で：同じパーツの中で、上下左右4つと色が違う孤立した1px を、
+    周りで一番多い色に置き換える（ノイズの点を消す。docs/00 0-2「孤立ピクセル」）。"""
+    out = img.copy()
+    for y in range(1, H - 1):
+        for x in range(1, W - 1):
+            g = gmap[y, x]
+            if g < 0:
+                continue
+            nb = [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]
+            if any(gmap[a, b] != g for a, b in nb):
+                continue
+            c = tuple(img[y, x])
+            cols = [tuple(img[a, b]) for a, b in nb]
+            if c in cols:
+                continue
+            best = max(set(cols), key=cols.count)
+            if cols.count(best) >= 3:
+                out[y, x] = best
+    return out
 
 
 def outlines(img, gmap, vz, lvmap, mats, groups, anatomy):
@@ -927,7 +961,7 @@ def outlines(img, gmap, vz, lvmap, mats, groups, anatomy):
         here = gmap >= 0
         edge_empty = here & (ng < 0)
         diff = here & (ng >= 0) & (ng != gmap) & (vz > nz)
-        jt = np.where(np.isin(gmap, hair_ids), HAIR_JUMP, 3.0)
+        jt = np.where(np.isin(gmap, hair_ids), HAIR_JUMP + (2.5 if SIMPLE else 0.0), 3.0)
         jump = here & (ng >= 0) & (ng == gmap) & (vz - nz > jt)
         e = edge_empty | diff | jump
         ys, xs = np.where(e)
@@ -991,6 +1025,7 @@ def texture_details(img, idx, Ph, gid, names, lv, P, bob):
 FACE_STYLE = "modern"   # "classic" で v4 までの目（比較用）
 # 顔パーツの高さ（頭の座標、頭頂 30.8・顎 0.6）。目を少し下げ、口を目に近づける（docs/12 12-2）
 EYE_Y, NOSE_Y, MOUTH_Y = 12.2, 7.6, 5.9
+EYE_X = 7.3
 
 MODERN_PAL = {
     "c": hx("#d9a29a"),  # 二重のライン（細く、肌より少し濃い色）
@@ -1066,8 +1101,8 @@ def draw_face_modern(put, eyes, hi_, bi):
     iris = IRIS_ROWS if eyes == "open" else ({5, 6} if eyes == "half" else set())
     far = [r[:1] + r[2:] for r in rows]          # 奥の目（3/4 向き）は1列狭く
     # 目は前髪の上にも描く（前髪越しに目元が見える「透け」。まつ毛が前髪に隠れると眠そうに見える）
-    put((-7.3, EYE_Y, 11.6), far, MODERN_PAL, allow=(bi,))
-    put((7.3, EYE_Y, 11.6), mirror_eye(rows, iris), MODERN_PAL, allow=(bi,))
+    put((-EYE_X, EYE_Y, 11.6), far, MODERN_PAL, allow=(bi,))
+    put((EYE_X, EYE_Y, 11.6), mirror_eye(rows, iris), MODERN_PAL, allow=(bi,))
     # 眉：細く、ゆるいアーチ。眉頭（内側）を少し上げた「ほんのり困り眉」は守ってあげたくなる可愛さ
     put((-7.0, 18.8, 12.4), ["...EEE", ".EE..."], FACE_PAL, allow=(hi_, bi))
     put((7.0, 18.8, 12.4), ["EEE...", "...EE."], FACE_PAL, allow=(hi_, bi))
@@ -1335,9 +1370,9 @@ def report():
     head = top - chin
     HS = HEAD_SCALE
     rnd = FACE_STYLE == "round"
-    crx = 14.3 if ROUND_FACE else 13.7
+    crx = 13.7 + 0.6 * ROUND_FACE
     ey, ny, my = (ROUND_EYE_Y, ROUND_NOSE_Y, ROUND_MOUTH_Y) if rnd else (EYE_Y, NOSE_Y, MOUTH_Y)
-    ecx = ROUND_EYE_X if rnd else 7.3
+    ecx = ROUND_EYE_X if rnd else EYE_X
     face_w = 2 * crx * math.sqrt(1 - ((17.5 - ey) / 13.3) ** 2) * HS   # 目の高さでの顔の幅
     eye_w, eye_cx, eye_h = (7.0 if rnd else 8.0), ecx * HS, (7 if rnd else 6)
     rows = [
@@ -1365,7 +1400,7 @@ def report():
 
 def main():
     import time
-    apply_preset("v7")
+    apply_preset("v8")
     report()
     os.makedirs(OUT, exist_ok=True)
     t0 = time.time()
