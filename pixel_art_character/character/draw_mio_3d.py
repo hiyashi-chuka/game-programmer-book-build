@@ -203,6 +203,21 @@ PITCH = math.radians(5.0)       # 少し上から見下ろす
 HEAD_SCALE = 1.06              # 頭を 1.06 倍（約5.0頭身）。大きな頭は可愛さの要素だが、1.1 倍では頭でっかちになった（docs/12）
 BODY_SCALE = 0.94              # 首から下を 0.94 倍（小柄に。頭と目の大きさは変えない。docs/12）
 ANIME_SMOOTH = 3.0              # 筋肉どうしをつなぐ幅（1.5 で写実寄り、3〜4 でアニメ寄り。docs/10 10-5）
+ROUND_FACE = False             # True：丸く横に広い顔（v7）
+SIDE_LOCK_OUT = 0.0            # 横髪を外へずらす量（v7：丸い頬を隠さない）
+BANG_UP = 0.0                  # 前髪の毛先を上げる量（v7：おでこを広く）
+
+# 絵柄のプリセット（比較用）。v7 は『メイドインアビス』の比率の研究（docs/13）を反映した版
+PRESETS = {
+    "v6": dict(HEAD_SCALE=1.06, BODY_SCALE=0.94, ANIME_SMOOTH=3.0, ROUND_FACE=False, FACE_STYLE="modern",
+               SIDE_LOCK_OUT=0.0, BANG_UP=0.0),
+    "v7": dict(HEAD_SCALE=1.08, BODY_SCALE=0.88, ANIME_SMOOTH=4.0, ROUND_FACE=True, FACE_STYLE="round",
+               SIDE_LOCK_OUT=1.8, BANG_UP=2.2),
+}
+
+
+def apply_preset(name):
+    globals().update(PRESETS[name])
 
 
 def head_dst(p, P):
@@ -378,6 +393,17 @@ def face_prims(P):
     L = lambda x, y, z: o + Rh @ v3(x, y, z)
     # 顔の輪郭（docs/11 11-2）：頭蓋は横にやや広い球、頬は目の下で一番広く、
     # そこから顎先へ「なめらかな V」で細くなる。顎の角（えら）は作らない
+    if ROUND_FACE:
+        # v7（docs/13）：円で組み立てた顔。頭蓋は横に広い球、頬は大きく丸く、顎はほとんど尖らない。
+        # 顔の幅 ≒ 頭の高さ、顔の下半分は小さい
+        out = [
+            Ellipsoid(L(0, 17.5, -1.0), (14.3, 13.4, 13.4), Rh, "cranium"),
+            Ellipsoid(L(0, 10.0, 2.4), (13.0, 7.6, 10.0), Rh, "cheek"),
+            Ellipsoid(L(0, 3.4, 5.0), (5.0, 2.8, 3.2), Rh, "chin"),
+        ]
+        for s in (-1, 1):
+            out.append(RoundCone(L(s * 10.0, 8.4, 2.6), L(s * 2.6, 3.2, 5.0), 3.6, 3.0, "jaw"))
+        return out
     out = [
         Ellipsoid(L(0, 17.5, -1.0), (13.7, 13.3, 13.3), Rh, "cranium"),
         Ellipsoid(L(0, 10.4, 2.4), (12.2, 7.0, 9.6), Rh, "cheek"),      # v6：頬をふっくら（ベビースキーマ）
@@ -608,11 +634,13 @@ def build_scene(bob=0.0, anatomy=False):
         hair += chain([p0, p1, p2, p3, p4, p5], [w * 0.7, w * 0.85, w * 0.85, w * 0.8, w * 0.6, 0.45], "strand")
     front = []   # 横髪と前髪は「顔の前を空ける」切り取りの対象外にするため別グループ
     # 横髪：こめかみから頬に沿って S 字に下り、毛先で外へ跳ねる。後ろにもう1本細い束を重ねる
+    sx_ = SIDE_LOCK_OUT   # v7 は丸い頬を見せるため横髪を外へ
     for s_ in (-1, 1):
-        front += chain([(s_ * 11.6, 22.0, 7.0), (s_ * 12.8, 14.0, 8.2), (s_ * 12.5, 7.5, 8.2),
-                        (s_ * 13.9, 1.4, 7.4), (s_ * 16.8, -2.4, 6.4)], [2.8, 2.6, 2.2, 1.4, 0.45], "side_lock")
-        front += chain([(s_ * 13.2, 21.0, 4.6), (s_ * 14.4, 12.0, 5.6), (s_ * 15.0, 4.0, 5.2),
-                        (s_ * 17.2, 0.6, 4.4)], [2.0, 1.8, 1.2, 0.4], "side_lock")
+        front += chain([(s_ * (11.6 + sx_), 22.0, 7.0 - sx_ * 0.6), (s_ * (12.8 + sx_), 14.0, 8.2 - sx_ * 0.8),
+                        (s_ * (12.5 + sx_), 7.5, 8.2 - sx_ * 0.8), (s_ * (13.9 + sx_), 1.4, 7.4 - sx_ * 0.6),
+                        (s_ * (16.8 + sx_), -2.4, 6.4 - sx_ * 0.5)], [2.8, 2.6, 2.2, 1.4, 0.45], "side_lock")
+        front += chain([(s_ * (13.2 + sx_), 21.0, 4.6), (s_ * (14.4 + sx_), 12.0, 5.6), (s_ * (15.0 + sx_), 4.0, 5.2),
+                        (s_ * (17.2 + sx_), 0.6, 4.4)], [2.0, 1.8, 1.2, 0.4], "side_lock")
     # 前髪：分け目（画面左寄り）から放射状に流れる。中央の束が一番長く太い、間に細い束。
     # 毛先は少し内側（中央）へ向け、束の間から額が見える（シースルーバング）
     part_x = -2.4
@@ -620,6 +648,7 @@ def build_scene(bob=0.0, anatomy=False):
                   (-1.8, -1.0, 16.0, 2.8), (1.6, 2.4, 17.4, 2.4), (4.8, 5.4, 18.9, 1.4),
                   (8.0, 8.6, 17.6, 2.3), (11.0, 11.9, 19.9, 1.6)]
     for rx, tx, ty, w in bangs_spec:
+        ty += BANG_UP             # v7 は前髪を短くしておでこを広く見せる
         root_x = part_x + (rx - part_x) * 0.55
         inward = -0.5 if tx > 0 else 0.5
         front += chain([(root_x, 28.6, 4.2), (rx, 25.6, 11.0), (tx * 0.98, (25.0 + ty) / 2, 12.9),
@@ -1051,6 +1080,71 @@ def draw_face_modern(put, eyes, hi_, bi):
     put((9.0, 7.4, 10.4), ["rrrr.", "rRRRr", ".rrr."], soft)
 
 
+# v7：丸く単純な目（docs/13）。7×7、瞳は大きく丸く、ハイライトは大1＋小1、まつ毛は目尻に1本だけ。
+# 列0＝目尻（輪郭線）、列1＝白目、列2〜5＝瞳、列6＝目頭（開いたまま）
+ROUND_PAL = {
+    "K": hx("#5a3038"),  # まぶたの線（濃い赤茶。細く一定）
+    "k": hx("#9a6670"),  # 下まぶた・まつ毛の淡い線
+    "W": hx("#ffffff"),
+    "d": hx("#4a2a66"),  # 瞳の上部（暗い）
+    "I": hx("#8a52a8"),  # 瞳
+    "J": hx("#c27ac4"),  # 瞳の下部（明るい）
+    "G": hx("#ecb6e4"),  # 瞳の最下部
+    "P": hx("#2e1a3e"),  # 瞳孔
+    "L": hx("#ffffff"),  # 大きめのハイライト
+    "l": hx("#f4e6ff"),  # 小さなハイライト
+}
+EYE_ROUND = [
+    ".kKKKK.",
+    "KKddddK",
+    "KWdLLdW",
+    "KWdLPdW",
+    ".WIPPIW",
+    ".WJIlJW",
+    "..JGGJ.",
+    "..kkk..",
+]
+EYE_ROUND_HALF = [
+    ".......",
+    ".......",
+    ".kKKKK.",
+    "KKddddK",
+    "KWJIlJW",
+    "..JGGJ.",
+    "..kkk..",
+    ".......",
+]
+EYE_ROUND_CLOSED = [".......", ".......", ".......", ".......", "k......", "KK...KK", "..KKK..", "......."]
+
+
+ROUND_EYE_X, ROUND_EYE_Y, ROUND_NOSE_Y, ROUND_MOUTH_Y = 7.9, 11.3, 8.0, 6.6
+
+
+def mirror_eye7(rows, iris_rows):
+    out = []
+    for j, r in enumerate(rows):
+        m = r[::-1]
+        out.append(m[0] + r[2:6] + m[5:] if j in iris_rows else m)
+    return out
+
+
+def draw_face_round(put, eyes, hi_, bi):
+    rows = {"open": EYE_ROUND, "half": EYE_ROUND_HALF, "closed": EYE_ROUND_CLOSED}[eyes]
+    iris = {1, 2, 3, 4, 5, 6} if eyes == "open" else ({3, 4, 5} if eyes == "half" else set())
+    far = [r[:1] + r[2:] for r in rows]
+    # 目は低く（頭頂から 0.64）、離して（両目の間 ≒ 片目の幅の 1.2 倍）置く
+    put((-ROUND_EYE_X, ROUND_EYE_Y, 11.8), far, ROUND_PAL, allow=(bi,))
+    put((ROUND_EYE_X, ROUND_EYE_Y, 11.8), mirror_eye7(rows, iris), ROUND_PAL, allow=(bi,))
+    # 眉：細く短く、目から少し離して高めに
+    put((-7.6, 17.8, 12.6), ["..EEE", "EE..."], FACE_PAL, allow=(hi_, bi))
+    put((7.6, 17.8, 12.6), ["EEE..", "...EE"], FACE_PAL, allow=(hi_, bi))
+    put((0.4, ROUND_NOSE_Y, 12.8), ["N"], {"N": hx("#f2b4a6")})          # 鼻はごく淡い1px
+    put((0.2, ROUND_MOUTH_Y, 12.2), ["M.M", ".M."], {"M": hx("#a85a62")})  # 小さな口（目に近い）
+    soft = {"r": hx("#ffcbc0"), "R": hx("#ffb0a8")}              # 丸い頬の赤み
+    put((-9.6, 7.8, 10.0), [".rr.", "rRRr", ".rr."], soft)
+    put((10.2, 7.8, 10.0), [".rr.", "rRRr", ".rr."], soft)
+
+
 def draw_face_classic(put, eyes, hi_, bi):
     eye_open = [
         "..KKKKK.",
@@ -1106,6 +1200,8 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes):
 
     if FACE_STYLE == "classic":
         draw_face_classic(put, eyes, hi_, bi)
+    elif FACE_STYLE == "round":
+        draw_face_round(put, eyes, hi_, bi)
     else:
         draw_face_modern(put, eyes, hi_, bi)
     # ヘアクリップ（キャラの左のこめかみ＝画面右）
@@ -1238,8 +1334,12 @@ def report():
     BS = BODY_SCALE
     head = top - chin
     HS = HEAD_SCALE
-    face_w = 2 * 13.7 * math.sqrt(1 - (3.9 / 13.3) ** 2) * HS   # 目の高さでの顔の幅
-    eye_w, eye_cx = 8.0, 7.3 * HS
+    rnd = FACE_STYLE == "round"
+    crx = 14.3 if ROUND_FACE else 13.7
+    ey, ny, my = (ROUND_EYE_Y, ROUND_NOSE_Y, ROUND_MOUTH_Y) if rnd else (EYE_Y, NOSE_Y, MOUTH_Y)
+    ecx = ROUND_EYE_X if rnd else 7.3
+    face_w = 2 * crx * math.sqrt(1 - ((17.5 - ey) / 13.3) ** 2) * HS   # 目の高さでの顔の幅
+    eye_w, eye_cx, eye_h = (7.0 if rnd else 8.0), ecx * HS, (7 if rnd else 6)
     rows = [
         ("頭身", top / head),
         ("首の長さ（顎〜頸窩）÷ 頭の高さ", (chin - P["neck_pit"][1] * BS) / head),
@@ -1250,12 +1350,12 @@ def report():
         ("目の幅 ÷ 顔の幅", eye_w / face_w),
         ("両目の間 ÷ 目の幅", (2 * eye_cx - eye_w) / eye_w),
         ("目尻〜輪郭 ÷ 目の幅", (face_w / 2 - eye_cx - eye_w / 2) / eye_w),
-        ("目の中心（頭頂から）", (30.8 - EYE_Y) * HS / head),
-        ("鼻（頭頂から）", (30.8 - NOSE_Y) * HS / head),
-        ("口（頭頂から）", (30.8 - MOUTH_Y) * HS / head),
-        ("目と口の三角形：高さ ÷ 両目の間隔（小さいほど童顔）", (EYE_Y - MOUTH_Y) / (2 * 7.3)),
-        ("瞳の幅 ÷ 目の幅", 5 / eye_w),
-        ("目の高さ（まつ毛〜下端）÷ 頭の高さ", 6 / head),
+        ("目の中心（頭頂から）", (30.8 - ey) * HS / head),
+        ("鼻（頭頂から）", (30.8 - ny) * HS / head),
+        ("口（頭頂から）", (30.8 - my) * HS / head),
+        ("目と口の三角形：高さ ÷ 両目の間隔（小さいほど童顔）", (ey - my) / (2 * ecx)),
+        ("瞳の幅 ÷ 目の幅", (4 if rnd else 5) / eye_w),
+        ("目の高さ（まつ毛〜下端）÷ 頭の高さ", eye_h / head),
         ("顔の幅 ÷ 頭の高さ", face_w / head),
         ("髪の厚み（頭頂）÷ 頭の高さ", (18.4 + 14.3 - 30.8) * HS / head),
     ]
@@ -1265,6 +1365,7 @@ def report():
 
 def main():
     import time
+    apply_preset("v7")
     report()
     os.makedirs(OUT, exist_ok=True)
     t0 = time.time()
