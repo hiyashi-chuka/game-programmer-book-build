@@ -37,7 +37,7 @@
   G.STORY.chapters[8] = async function () {
     E.time('night');
     E.set('c7_dark');
-    E.set('w_evac');
+    E.unset('w_evac');
     E.set('c7_eisen_ally');
     E.set('c7_gil_ally');
     E.set('c8_port_open');

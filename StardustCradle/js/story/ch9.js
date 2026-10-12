@@ -17,7 +17,7 @@
   // =============================================================
   G.STORY.chapters[9] = async function () {
     E.set('c7_dark');
-    E.set('w_evac');
+    E.unset('w_evac');
     E.set('c8_calm');
     E.set('c8_core_intro');
     E.set('c8_port_open');
