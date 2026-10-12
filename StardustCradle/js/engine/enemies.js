@@ -139,7 +139,7 @@
       this.maxhp = this.hp = Math.floor((o.hp || d.hp) * (o.hp ? 1 : bossy ? 1 + (lv - 1) * 0.35 : k));
       this.atk = Math.floor(d.atk * k);
       this.def = Math.floor(d.def * (1 + (lv - 1) * 0.12));
-      this.exp = Math.floor(d.exp * k);
+      this.exp = o.exp !== undefined ? o.exp : Math.floor(d.exp * k);
       this.money = Math.floor(d.money * k);
       this.spd = d.spd * (o.spdMul || 1);
       this.ai = o.ai || d.ai;

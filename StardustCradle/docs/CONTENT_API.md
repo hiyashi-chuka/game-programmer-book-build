@@ -301,10 +301,11 @@ const won = await E.battle({
   party: false,                            // 生身戦で仲間を出さない
   onStart: async () => { await E.say('ruu','いくよ！'); },
   returnTo: ['scrapbay', 10, 8, 'down'],   // 終了後の移動先（省略で元の場所）
+  quietWin: true,                          // 勝利バナーと勝利BGMを出さない（演出に繋げたい時）
 });
 ```
 - 負けるとゲームオーバー画面（リトライで戦闘をやり直し）。`canLose:true` の負け戦は「ストーリー上の敗北」に使う。
-- 敵の個別指定：`{ type, x, y, lv, hp, boss:true, name:'名前', ai, spdMul, color:{body:'#..',accent:'#..'} }`
+- 敵の個別指定：`{ type, x, y, lv, hp, exp, boss:true, name:'名前', ai, spdMul, color:{body:'#..',accent:'#..'} }`
 
 #### 敵タイプ（`G.ENEMIES`）
 生身：`rat`（スクラップラット）`drone`（警備ドローン・射撃）`bot`（暴走整備ボット）`turret`（固定砲台）`thug`（チンピラ）`punk`（ジャッカルズ下っ端）`guard`（公安隊員）`guard2`（公安特務）`echo`（エコー体・瞬間移動）

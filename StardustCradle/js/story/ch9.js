@@ -280,7 +280,7 @@
       ruu.pinned = true;
     }
     if (niko) {
-      E.teleport('f_niko', 15, 14, 'down');
+      E.teleport('f_niko', 14, 12, 'down');
       niko.pinned = true;
     }
     await E.wait(20);

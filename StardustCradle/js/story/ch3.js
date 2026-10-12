@@ -1316,8 +1316,7 @@
     E.cut(false);
     await E.battle({
       map: 'arena', mech: true, mechId: 'harukaze', x: 17, y: 17, dir: 'up', bgm: 'boss', title: 'FINAL ROUND', sub: 'VS ギル・ブレイズ〈サラマンダー〉', after: 'stay', win: 'boss',
-      // state:'idle' … spawnWave が 'chase' にすると salamander AI が動かないため
-      enemies: [{ type: 'salamander', x: 17, y: 6, lv: 5, hp: 1150, boss: true, state: 'idle', name: 'サラマンダー（ギル）' }],
+      enemies: [{ type: 'salamander', x: 17, y: 6, lv: 5, hp: 1000, boss: true, name: 'サラマンダー（ギル）' }],
       onStart: async () => {
         await E.say('kanata', '（キョウスケ先輩が言ってた……止まったら、横だ！）');
       },

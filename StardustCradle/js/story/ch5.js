@@ -419,6 +419,7 @@
     await E.say('yui', '動きが重いぶん、突進と衝撃波に気をつけてください！　ドクさんの言葉どおり、動きをよく見て！');
     await E.say('kanata:serious', 'ここを抜けなきゃ、ニコのところへは行けない……！');
     await E.cameraReset();
+    E.cut(false);
     const won = await E.battle({
       enemies: [{ type: 'warden', x: 40, y: 15, lv: 7, hp: 1100, boss: true }],
       bgm: 'boss', title: 'BOSS', sub: '監視ロボ〈ウォーデン〉',
@@ -649,6 +650,7 @@
     await E.say('guard', 'いたぞ！　被験体を確保しろ！', { name: '公安特務隊員' });
     await E.say('niko:serious', 'カナタ。ほしの、こえ。きいて。……まもる、って、おもって。');
     H.clear(['c5_a_g1', 'c5_a_g2']);
+    E.cut(false);
     await E.battle({
       enemies: [
         { type: 'guard2', x: 18, y: 10, lv: 7 },
@@ -761,6 +763,7 @@
     E.remove('c5_a_noc');
     E.remove('c5_a_rose');
     let draw = false;
+    E.cut(false);
     await E.battle({
       map: 'c5_dock', x: 8, y: 13, dir: 'right', mech: true, mechId: 'harukaze',
       enemies: [{ type: 'nocturne', x: 28, y: 13, lv: 8, hp: 2600, boss: true, name: 'ノクターン（ミラージュ）' }],

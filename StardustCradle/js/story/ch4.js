@@ -371,6 +371,7 @@
             return;
           }
           await E.say('ruu:grin', 'カラス退治？　ちょうど体がなまってたとこ。');
+          E.cut(false);
           const won = await E.battle({
             enemies: [
               { type: 'drone', x: 4, y: 19, lv: 5, name: 'カラス型ドローン' },
@@ -1412,6 +1413,7 @@
     await E.say('ruu:angry', 'ちょっと！　女の子ひとりに大人がふたりがかり？　だっさ。');
     await E.say('c4_sec', '……邪魔をするな。民間人の妨害は拘束対象だ。');
     E.set('c4_r1f');
+    E.cut(false);
     await E.battle({ enemies: [{ type: 'guard', x: 41, y: 5, lv: 5 }, { type: 'guard', x: 41, y: 7, lv: 5 }], title: 'BATTLE!', sub: '公安隊員を追い払え' });
     E.cut();
     raidClean();
@@ -1441,6 +1443,7 @@
         await E.say('c4_sec', 'どけ。この区画も捜索対象だ。');
         await E.say('kanata:angry', 'おい！　その子に手を出すな！');
         E.set('c4_r2f');
+        E.cut(false);
         await E.battle({ enemies: [{ type: 'guard', x: 31, y: 27, lv: 5 }, { type: 'guard', x: 34, y: 27, lv: 5 }, { type: 'drone', x: 33, y: 26, lv: 5 }], title: 'BATTLE!', sub: '公安隊員を追い払え' });
         E.cut();
         raidClean();
@@ -1464,6 +1467,7 @@
     await E.say('c4_sec', '機材の持ち出しは許可できない。全員、両手を上げて――');
     await E.say('ruu:angry', 'ロックの邪魔すんな！');
     E.remove('c4_r3g');
+    E.cut(false);
     await E.battle({ enemies: [{ type: 'guard', x: 17, y: 12, lv: 5 }, { type: 'drone', x: 12, y: 11, lv: 5 }, { type: 'drone', x: 22, y: 11, lv: 5 }], title: 'BATTLE!', sub: '公安隊員を追い払え' });
     E.cut();
     raidClean();
@@ -1579,6 +1583,7 @@
     E.party([]);
     G.state.mech.id = 'harukaze';
     await E.say(null, 'ハルカゼの起動音が、夕暮れの校庭に響いた――。');
+    E.cut(false);
     await E.battle({
       map: 'c4_chase', x: 4, y: 10, dir: 'right', mech: true, mechId: 'harukaze',
       waves: [
@@ -1617,6 +1622,7 @@
     E.remove('c4_a_noc');
     E.remove('c4_a_rose');
     let finish = null;
+    E.cut(false);
     await E.battle({
       map: 'c4_chase', x: 12, y: 10, dir: 'right', mech: true, mechId: 'harukaze',
       enemies: [{ type: 'nocturne', x: 28, y: 10, lv: 6, hp: 4000, boss: true, name: 'ノクターン（？？？）' }],

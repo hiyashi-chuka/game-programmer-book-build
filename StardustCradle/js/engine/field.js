@@ -658,16 +658,15 @@
     }
     const won = F.battle.won;
     F.battle.active = false;
-    if (won) {
+    if (won && !def.quietWin) {
       F.battle.bannerT = 0;
       F.battle.bannerText = def.mech ? 'MISSION COMPLETE' : 'VICTORY!';
       F.battle.bannerSub = '';
       F.battle.bannerCol = G.UI.gold;
       G.audio.bgm('victory');
       await G.waitFrames(130);
-      // 残った回収物を自動で拾う
-      for (const e of F.ents) if (e instanceof G.Pickup && !e.persistent) e.collect();
     }
+    if (won) for (const e of F.ents) if (e instanceof G.Pickup && !e.persistent) e.collect(); // 残った回収物を自動で拾う
     if (def.after !== 'stay') {
       await G.ev.fadeOut(16);
       F.battle = null;
