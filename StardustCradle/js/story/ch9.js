@@ -22,6 +22,7 @@
     E.set('c8_core_intro');
     E.party(['ruu', 'niko']);
     G.state.mech.id = 'harukaze2';
+    G.state.objective = '';
     await E.chapter(9);
     await E.warp('c8_core', 17, 21, 'up');
     await C9.seedClose();
@@ -133,6 +134,7 @@
   });
 
   C9.homecoming = async function () {
+    G.state.objective = '';
     await E.warp('scrapbay', 53, 45, 'down');
     E.cut();
     E.bgm('home');

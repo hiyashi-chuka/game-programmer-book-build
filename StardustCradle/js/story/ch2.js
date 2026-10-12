@@ -79,6 +79,9 @@
     G.state.mech.id = 'ponkotsu';
     E.unset('c2_ruu_mode');
     E.party([]);
+    E.cgOff();
+    E.tint(null);
+    E.hide('player', false);
     setStep(0);
     await E.chapter(2);
     await E.warp('hoshikuzu', 7, 10, 'up', { noEnter: true });
@@ -707,6 +710,7 @@
   });
   async function sceneRooftop() {
     setStep(6);
+    E.exp(E.val('c2_mimi_fail') ? 30 : 60);
     E.cut();
     E.party([]);
     E.objective('');
@@ -770,6 +774,7 @@
     const sc = await E.timing({ title: 'ドッジボール', rounds: 5, speed: 1.7, zone: 0.17, labels: ['ボールが来た！　よけろ！', 'キャッチだ！', '投げ返せ！', 'ニコを狙ってる！　かばえ！', 'とどめの一球！'] });
     E.cut();
     E.set('c2_dodge', sc);
+    E.exp(50 + sc * 15);
     if (sc >= 4) {
       await E.say('w2_takashi:surprise', 'なっ……全部よけて、全部当てた！？　化け物かよ！');
       await E.say('vargas:smile', 'うむ！　見事だ春瀬！　今日のMVPだ！');
@@ -1355,7 +1360,7 @@
     await E.say('ruu', '……なんなの、あいつ。');
     await E.say('kanata:grin', '……悪いやつじゃ、なさそうだな。');
     await E.say('kanata:surprise', 'あ、やべ！　ばあちゃんの店の手伝い！　今日は混むって言われてたんだ！');
-    E.exp(40);
+    E.exp(150);
     del('c2_ruu', 'c2_niko');
     E.party(['ruu', 'niko']);
     setStep(13);
@@ -1387,6 +1392,7 @@
     const s1 = await E.timing({ title: '星屑亭・夜の部', rounds: 4, speed: 1.6, zone: 0.17, labels: ['工場長の大盛り！', 'ミナミさんの麺かため！', 'サブローさんのネギ多め！', 'チャーシュー追加！'] });
     E.cut();
     E.set('c2_shop_score', s1);
+    E.exp(40 + s1 * 10);
     if (s1 >= 3) {
       await E.say('c2_cust1:smile', 'うん、うまい！　カナタ坊、腕を上げたな！');
       await E.say('tome:smile', '……ふん。まあまあだね。');
@@ -1619,6 +1625,7 @@
     await E.say('niko:smile', '……うん！');
     await E.say('doc', '……ふん。血は争えんな。');
     await E.say('doc', 'ポンコツ号は、とりあえず動くようにはしといてやる。勝てるかどうかは、おまえ次第じゃ。');
+    E.exp(60);
     await E.say('doc', 'アンダーシェルの入り方は……そうじゃな。ネオン通りの海賊ラジオのDJに聞け。あの娘は、下のことなら何でも知っとる。');
     await E.say('ruu', 'レディオ・スターダスト？　……チビたちが毎晩聴いてるやつだ。');
     await E.say('doc', '夜にならんと局は開かん。……今夜は、ゆっくり寝て、腹をくくっておけ。');

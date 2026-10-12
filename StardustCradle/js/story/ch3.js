@@ -37,10 +37,13 @@
     shell_lobby: ['scrapbay', 53, 15, 'down'],
     minato: ['hoshikuzu', 7, 10, 'up'],
   };
+  const BACK2 = { minato: ['school_yard', 22, 37, 'up'] };
   const BLOCK = (mapId) => {
     const s = step();
     if (mapId === 'shell_lobby' && s < 4) return ['ruu', '待って。まずはリリィに話を聞かないと。受付のしかたも、わかんないっしょ。'];
     if (mapId === 'scrapbay' && s >= 9 && s <= 12 && G.state.party.length === 0) return ['ponta', 'カナタ！　試合中に外に出ちゃダメっす！　失格になるっすよ！'];
+    if (mapId === 'minato' && s === 8.5) return ['ruu', 'ちょっと、授業サボる気？　昼休みは屋上って言ったでしょ。'];
+    if (mapId === 'school_yard' && s === 8.5) return null;
     if ((mapId === 'green' || mapId === 'school_yard') && s >= 1 && s <= 12) return ['ruu', 'そっちじゃないって。今夜の目的、忘れたの？'];
     if (mapId === 'minato' && s === 13) return ['ponta', 'カナタ〜！　主役がどこ行くっすか！　まだ乾杯してないっすよ！'];
     return null;
@@ -53,7 +56,7 @@
         if (!b) return;
         E.cut();
         await E.say(b[0], b[1]);
-        const [m, x, y, d] = BACK[mapId];
+        const [m, x, y, d] = (step() === 8.5 && BACK2[mapId]) || BACK[mapId];
         await E.warp(m, x, y, d, { noEnter: true });
         E.cut(false);
       },
@@ -84,6 +87,9 @@
     E.time('night');
     G.state.mech.id = 'ponkotsu';
     E.party([]);
+    E.cgOff();
+    E.tint(null);
+    E.unset('c2_ruu_mode');
     setStep(0);
     if (G.field.player && G.field.player.charId !== 'kanata') E.setChar('kanata');
     await E.chapter(3);
@@ -256,12 +262,53 @@
   // ---------- ゲーセン：シミュレーター ----------
   G.addToMap('arcade', {
     onEnter: async () => {
-      if (at(2)) await sceneArcade();
+      if (at(2) && !E.flag('c3_arcade_intro')) await sceneArcade(false);
     },
   });
-  async function sceneArcade() {
+  function stageArcade() {
+    del('w2_manager', 'c3_goto_retry', 'c3_ruu', 'c3_niko', 'c3_goto');
+    put('c3_ruu', 'ruu', 14, 11, 'up');
+    put('c3_niko', 'niko', 13, 11, 'up');
+    put('c3_goto', 'c3_goto', 16, 10, 'left');
+    E.teleport('player', 15, 10, 'up');
+  }
+  async function sceneArcade(retry) {
     E.cut();
     E.party([]);
+    if (retry) {
+      stageArcade();
+      await E.say('c3_goto', '……懲りねえな。いいだろう、もう一度だ。');
+    } else await arcadeIntro();
+    E.set('c3_arcade_intro');
+    E.cut(false);
+    for (;;) {
+      const won = await E.battle({
+        map: 'c3_sim', mech: true, mechId: 'ponkotsu', x: 14, y: 16, dir: 'up', bgm: 'mech', title: 'SIMULATION', sub: '仮想ジャンク・デュエル：全機撃破せよ', canLose: true,
+        waves: [
+          [{ type: 'junker', x: 10, y: 5, lv: 2, name: '仮想ジャンカーA' }, { type: 'junker', x: 19, y: 5, lv: 2, name: '仮想ジャンカーB' }],
+          [{ type: 'clanB', x: 14, y: 4, lv: 3, name: '仮想ホーネット' }, { type: 'junker', x: 6, y: 6, lv: 2, name: '仮想ジャンカーC' }],
+        ],
+        onStart: async () => {
+          await E.say('c3_goto', '（ヘッドセット越しに）Zでビーム、Cで近接、Xでブースト。……せいぜい長生きしな。');
+        },
+      });
+      E.cut();
+      stageArcade();
+      if (won) break;
+      await E.say('c3_goto', '……そんなもんか。もう一度やるか？');
+      const k = await E.ask('kanata', '（くっ……！）', ['もう一回！', '少し休む（あとで店長に話しかける）'], { cancel: 1 });
+      E.cut(false);
+      if (k !== 0) {
+        del('c3_ruu', 'c3_niko', 'c3_goto');
+        E.party(['ruu', 'niko']);
+        E.reload();
+        E.objective('ゲーセンの店長に話しかけて、シミュレーターに再挑戦');
+        return;
+      }
+    }
+    await arcadeWin();
+  }
+  async function arcadeIntro() {
     E.remove('w2_manager');
     put('c3_ruu', 'ruu', 15, 14, 'up');
     put('c3_niko', 'niko', 13, 14, 'up');
@@ -275,36 +322,12 @@
     await E.say('c3_goto', '……俺の記録を抜いたら、推薦状を書いてやる。');
     await E.say('w2_king', 'おいおい店長、そいつはムリだって！　あのモード、上級者向けの鬼設定だぜ！');
     await E.say('kanata:grin', '……燃えてきた。');
-    await E.move('c3_goto', 'R');
-    await E.move('player', [[14, 10], [15, 10]]);
+    await Promise.all([E.move('c3_goto', [[16, 10]]), E.move('player', [[14, 10], [15, 10]]), E.move('c3_ruu', [[15, 12], [14, 12], [14, 11]]), E.move('c3_niko', [[13, 11]])]);
     E.face('player', 'up');
+    E.face('c3_goto', 'left');
     await E.say(null, 'カナタはシミュレーターのシートに座った。ヘッドセットをかぶると、視界がネオンの格子に包まれる──');
-    E.cut(false);
-    for (;;) {
-      const won = await E.battle({
-        map: 'c3_sim', mech: true, mechId: 'ponkotsu', x: 14, y: 16, dir: 'up', bgm: 'mech', title: 'SIMULATION', sub: '仮想ジャンク・デュエル：全機撃破せよ', canLose: true,
-        waves: [
-          [{ type: 'junker', x: 10, y: 5, lv: 2, name: '仮想ジャンカーA' }, { type: 'junker', x: 19, y: 5, lv: 2, name: '仮想ジャンカーB' }],
-          [{ type: 'clanB', x: 14, y: 4, lv: 3, name: '仮想ホーネット' }, { type: 'junker', x: 6, y: 6, lv: 2, name: '仮想ジャンカーC' }],
-        ],
-        onStart: async () => {
-          await E.say('c3_goto', '（ヘッドセット越しに）Zでビーム、Cで近接、Xでブースト。……せいぜい長生きしな。');
-        },
-      });
-      if (won) break;
-      E.cut();
-      await E.say('c3_goto', '……そんなもんか。もう一度やるか？');
-      const k = await E.ask('kanata', '（くっ……！）', ['もう一回！', '少し休む（あとで店長に話しかける）'], { cancel: 1 });
-      E.cut(false);
-      if (k !== 0) {
-        del('c3_ruu', 'c3_niko', 'c3_goto');
-        E.party(['ruu', 'niko']);
-        E.reload();
-        E.objective('ゲーセンの店長に話しかけて、シミュレーターに再挑戦');
-        return;
-      }
-    }
-    E.cut();
+  }
+  async function arcadeWin() {
     E.set('c3_sim_won');
     await E.say(null, 'ピロリロリン！　──画面に「NEW RECORD」の文字が躍った。');
     await E.say('w2_king:surprise', 'う、うそだろ……店長の記録を、ポンコツ機で……！？');
@@ -335,11 +358,8 @@
   G.addToMap('arcade', {
     npcs: [
       {
-        id: 'c3_goto_retry', char: 'c3_goto', x: 16, y: 10, dir: 'down', move: 'still', show: () => at(2) && !E.flag('c3_sim_won'),
-        talk: async () => {
-          await E.say('c3_goto', '……もう一度、やるか？');
-          await sceneArcade();
-        },
+        id: 'c3_goto_retry', char: 'c3_goto', x: 16, y: 10, dir: 'down', move: 'still', show: () => at(2) && E.flag('c3_arcade_intro') && !E.flag('c3_sim_won'),
+        talk: async () => await sceneArcade(true),
       },
     ],
   });
@@ -655,6 +675,7 @@
     await E.say('ponta:cry', 'このままじゃ、本戦は無理っす……。');
     await E.say('w2_registrar', '……予選突破、おめでとう。賞金よ。');
     E.money(1200);
+    E.exp(100);
     await E.say('w2_registrar', '本戦は3日後の夜。……それまでに機体を用意できなければ、棄権扱いになるわ。');
     E.party([]);
     put('c3_ruu', 'ruu', 16, 8, 'up');
@@ -773,6 +794,8 @@
     E.teleport('player', 12, 11, 'up');
     await E.say('ponta', '速いっす！　ポンコツ号の時とは、まるで別物っす！');
     await E.say('doc', '……ふん。合格じゃ。');
+    await E.say('doc', 'ほれ、組み上げで余ったジャンクパーツじゃ。もっと強くしたけりゃ、パーツと金を持ってワシのとこへ来い。');
+    await E.give('scrap', 4);
     await E.say('ruu', '……。');
     await E.say('ruu', '……ねえ、ドク。');
     await E.say('ruu:serious', 'あたしも、機体に乗りたい。……観客席から叫んでるだけなんて、もうイヤ。');
@@ -1005,15 +1028,155 @@
     await E.say('sig', '……おかわりを、ください。');
     await E.say('niko:smile', '……ニコも、おかわり。');
     await E.say('ruu:grin', 'ニコは張り合わなくていいから。');
+    await E.say('sig', '……ごちそうさまでした。今夜は、帰ります。……本戦の夜に、また。');
     await E.fadeOut(30);
     del('c3_ruu', 'c3_niko', 'c3_sig');
-    await E.say(null, '──そして、本戦の夜がやってきた。');
+    await sceneSchoolDay();
+  }
+
+  // ---------- 本戦前日：学校の一日 ----------
+  async function sceneSchoolDay() {
+    setStep(8.6);
+    await E.say(null, '──翌日。第三中学校。');
+    E.time('morning');
+    E.party([]);
+    await E.warp('classroom', 6, 9, 'up', { noEnter: true, noFade: true });
+    put('c3_ruu', 'ruu', 14, 9, 'left');
+    put('c3_niko', 'niko', 3, 9, 'right');
+    E.remove('w2_takashi');
+    put('c3_taka', 'w2_takashi', 8, 8, 'left');
+    await E.fadeIn(20);
+    E.bgm('school');
+    E.cut();
+    await E.say('w2_takashi', 'なあなあ春瀬、聞いたか！？　ゆうべのアンダーシェルの噂！');
+    await E.say('w2_takashi', '新人クラン〈スターダスト〉ってのが、作業機で予選を勝ち抜いたんだってよ！　パイロットは中学生って噂だぜ！');
+    await E.say('kanata:think', 'へ、へえー……。すごい中学生もいるもんだなー……。');
+    await E.say('w2_takashi', 'しかもさ、昨日は白い天使みたいな機体まで加わったって！　オレ、絶対見に行くぜ、本戦！');
+    await E.say('ruu', '（……バレてないよね）');
+    await E.say('niko:smile', '……すたーだすと、つよい。');
+    await E.say('w2_takashi', 'お、ニコちゃんも知ってんの！？　ファンなの！？');
+    await E.say('niko:smile', '……うん。いちばんの、ふぁん。');
+    await goOut('c3_taka', [[8, 13], [20, 13], [20, 15]]);
+    await E.say('ruu', '……ニコ、あぶない。');
+    await E.say('ruu', 'カナタ、昼休みに屋上。……話したいことがある。');
+    del('c3_ruu', 'c3_niko');
+    E.party(['ruu', 'niko']);
+    setStep(8.5);
+    E.reload();
+    E.cut(false);
+    E.objective('昼休み：学校で過ごす（屋上でルウと話すと放課後へ）');
+  }
+  G.addToMap('classroom', {
+    npcs: [
+      {
+        id: 'c3_yui_s', char: 'yui', x: 6, y: 7, dir: 'down', move: 'still', show: () => at(8.5),
+        talk: async () => {
+          await E.say('yui', '春瀬くん。……その手の包帯、どうしたんですか。');
+          const k = await E.ask('kanata', '（……機体の整備でついた傷だ）', ['「ラーメンの湯切りで……」', '「……ちょっと、ケンカ」']);
+          if (k === 0) {
+            await E.say('yui:think', '……ラーメンの湯切りで、両手の指にオイル汚れはつきません。');
+            await E.say('kanata:cry', 'う……。');
+          } else {
+            await E.say('yui:angry', 'ケンカ！？　校則第21条、校内外での暴力行為の禁止……！');
+            await E.say('yui', '……なんて、言いません。鬼塚先輩とのこと、ミミさんから聞きました。');
+          }
+          await E.say('yui', '……最近、ニコさんも、水無月さんも、あなたも。夜になると、どこかへ行っているでしょう。');
+          await E.say('yui:serious', 'わたしは、学級委員です。クラスの誰かが危ない目にあうのは……いやです。');
+          await E.say('yui:shy', '……無茶だけは、しないでください。');
+        },
+      },
+      {
+        id: 'c3_ponta_s', char: 'ponta', x: 17, y: 9, dir: 'up', move: 'still', show: () => at(8.5),
+        talk: async () => {
+          await E.say('ponta', 'ぐー……ぐー……むにゃ……ハルカゼの……関節トルク……あと3%……。');
+          await E.say('kanata', '（ポンタ、徹夜で整備してくれたんだ……）');
+          await E.say('ponta', '……ローズハウンドの……リミッター……ルウちゃんなら……外せるっす……むにゃ。');
+          await E.say(null, 'ポンタの机の上に、びっしりと書きこまれた整備ノートが広げてある。');
+        },
+      },
+    ],
+  });
+  G.addToMap('school_hall', {
+    onEnter: async () => {
+      if (at(8.5)) E.remove('w2_mimi');
+    },
+    npcs: [
+      {
+        id: 'c3_mimi_s', char: 'mimi', x: 20, y: 5, dir: 'down', move: 'still', show: () => at(8.5),
+        talk: async () => {
+          await E.say('mimi', '先輩！　ちょうどいいところに！');
+          await E.say('mimi:think', 'ゆうべ、アンダーシェルの入り口の近くで、黄色いハチマキの大きな人と、ピンクのメッシュの人を見たって情報が……。');
+          await E.say('kanata:surprise', 'ぎくっ。');
+          await E.say('mimi', '……先輩、目が泳いでるっす。');
+          const k = await E.ask('kanata', '（ミミがカメラを構えている……！）', ['「人違いだって！」', '「……記事にしないでくれ」']);
+          if (k === 0) {
+            await E.say('mimi', 'ふーん……。まあ、そういうことにしておくっす。');
+          } else {
+            await E.say('mimi', '……。');
+            await E.say('mimi:smile', 'わかってるっす。記者には、書かない勇気も必要っす。');
+            await E.say('mimi', 'そのかわり、全部終わったら、独占インタビューさせてほしいっす！　約束っすよ！');
+          }
+          await E.say('mimi:serious', '……でも、気をつけてほしいっす。最近、学校のまわりに公安の車が停まってるっす。');
+        },
+      },
+    ],
+  });
+  G.addToMap('rooftop', {
+    onEnter: async () => {
+      if (at(8.5)) await sceneRooftopCh3();
+    },
+  });
+  async function sceneRooftopCh3() {
+    setStep(8.8);
+    E.cut();
+    E.party([]);
+    put('c3_ruu', 'ruu', 17, 11, 'up');
+    put('c3_niko', 'niko', 6, 10, 'up');
+    put('c3_sig', 'sig', 26, 9, 'down');
+    E.teleport('player', 7, 10, 'up');
+    await Promise.all([E.move('player', [[7, 12], [16, 12]]), E.move('c3_niko', [[6, 12], [15, 12]])]);
+    E.face('player', 'up');
+    E.face('c3_niko', 'up');
+    E.face('c3_ruu', 'down');
+    await E.say('ruu', '……来たね。');
+    await E.say('ruu', 'あのさ。……リリィのこと。');
+    await E.say('ruu', 'ラジオ局で会った時、あの人、あたしの名前を呼んだでしょ。ハガキで知ったって言ってたけど……。');
+    await E.say('ruu:think', 'あの呼び方。「ルウ」って、最後をちょっと上げる言い方。……リリねえと、同じなんだ。');
+    await E.say('kanata', 'リリねえ……？');
+    await E.say('ruu', '施設の先輩。ずっと昔、白い車に連れていかれて、それっきり。');
+    await E.say('ruu:sad', '……まさか、ね。リリねえなら、隠す理由なんてないもん。');
+    await E.say('niko', '……リリィの、こえ。ニコ、しってる、きがする。……しろいへやで、きいた、きがする。');
+    await E.say('ruu:surprise', '……！');
+    await E.say('kanata:think', '（白い部屋……ニコがいた場所。リリィさんも、そこに……？）');
+    await E.say('sig', '……その話、とても大事なことかもしれません。');
+    E.emote('c3_ruu', '!');
+    await E.say('ruu:surprise', 'うわっ！？　シ、シグ！？　なんで給水塔の上にいんの！？');
+    await E.say('sig', '……「学校」というところに、一度、来てみたかったので。');
+    await E.say('kanata:grin', '不法侵入だろ、それ……。');
+    await E.move('c3_sig', [[26, 12], [18, 12]]);
+    E.face('c3_sig', 'left');
+    await E.say('sig', '……白い部屋。プロジェクト・エコー。……僕も、その名前を知っています。');
+    await E.say('ruu:angry', 'あんた、やっぱり何か知ってるんじゃん！');
+    await E.say('sig', '……はい。でも、今それを話しても、きっと信じてもらえない。');
+    await E.say('sig', '今は、明日の試合を。……勝って、ニコの居場所を作りましょう。それが、一番の近道です。');
+    await E.say('ruu', '……。');
+    await E.say('ruu', '……わかった。今は、それでいい。');
+    await E.say('ruu:serious', 'でも、全部終わったら、ちゃんと話してもらうから。');
+    await E.say('sig', '……約束します。');
+    await E.say('niko:smile', '……やくそく。ゆびきり。');
+    await E.say('sig', '……ゆびきり？');
+    await E.say('ruu:grin', '……ほんとに何も知らないんだね、あんた。こうやって、小指を──');
+    await E.fadeOut(30);
+    del('c3_ruu', 'c3_niko', 'c3_sig');
+    await E.say(null, '──放課後。そして、本戦の夜がやってきた。');
     E.time('night');
     E.party(['ruu', 'niko', 'sig']);
     setStep(9);
-    E.teleport('player', 7, 9, 'down');
+    await E.warp('hoshikuzu', 7, 9, 'down', { noEnter: true, noFade: true });
     await E.fadeIn(20);
+    E.bgm('home');
     await E.say('tome', 'いってらっしゃい。……全員、ちゃんと帰ってくるんだよ。');
+    await E.say('sig', '……はい。');
     E.cut(false);
     E.objective('アンダーシェルへ。いよいよ本戦！（スクラップ・ベイの LIFT B7）');
   }
@@ -1188,6 +1351,7 @@
     await E.say('kanata:think', '（……今、誰かに見られていたような……）');
     // ロビーで表彰
     E.set('c3_won');
+    E.exp(300);
     setStep(12.5);
     E.bgm('arena');
     await E.warp('shell_lobby', 25, 7, 'up', { noEnter: true });
@@ -1349,5 +1513,5 @@
   }
 
   // デバッグ・テスト用
-  G.C3 = { setStep, sceneDepart, sceneLily, sceneArcade, scenePontaLift, sceneRegister, sceneQualifiers, sceneRebuild, sceneRoseAndSig, sceneSigRamen, sceneTournamentNight, sceneQuarter, sceneSemi, sceneFinal, scenePartyStart, scenePartyToast, sceneEisenCoda };
+  G.C3 = { sceneSchoolDay, sceneRooftopCh3, setStep, sceneDepart, sceneLily, sceneArcade, scenePontaLift, sceneRegister, sceneQualifiers, sceneRebuild, sceneRoseAndSig, sceneSigRamen, sceneTournamentNight, sceneQuarter, sceneSemi, sceneFinal, scenePartyStart, scenePartyToast, sceneEisenCoda };
 })();

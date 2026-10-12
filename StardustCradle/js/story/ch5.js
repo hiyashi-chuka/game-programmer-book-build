@@ -617,7 +617,7 @@
     H.clear(['c5_a_niko', 'c5_a_ruu', 'c5_a_yui']);
     E.party(['ruu', 'niko', 'yui']);
     setPh(6);
-    H.reward(800);
+    H.reward(1000);
     E.npc({ id: 'c5_a_g1', char: 'guard', x: 10, y: 10, dir: 'right', move: 'still' });
     E.npc({ id: 'c5_a_g2', char: 'guard', x: 10, y: 12, dir: 'right', move: 'still' });
     await E.say('guard', 'いたぞ！　被験体を確保しろ！', { name: '公安特務隊員' });
@@ -678,8 +678,8 @@
     npcs: [
       { id: 'c5_d_haru', char: 'sys', mech: 'harukaze', x: 8, y: 9, dir: 'down', move: 'still', noFace: true, show: () => ch5() && !E.flag('c5_dock_board') },
       { id: 'c5_d_rose', char: 'sys', mech: 'rose', x: 11, y: 9, dir: 'down', move: 'still', noFace: true, show: () => ch5() && !E.flag('c5_dock_board') },
-      { id: 'c5_d_ponta', char: 'ponta', x: 9, y: 12, dir: 'left', move: 'still', show: () => ch5() && !E.flag('c5_dock_done') },
-      { id: 'c5_d_doc', char: 'doc', x: 12, y: 12, dir: 'left', move: 'still', show: () => ch5() && !E.flag('c5_dock_done') },
+      { id: 'c5_d_ponta', char: 'ponta', x: 9, y: 12, dir: 'left', move: 'still', show: () => ch5() && !E.flag('c5_dock_board') },
+      { id: 'c5_d_doc', char: 'doc', x: 12, y: 12, dir: 'left', move: 'still', show: () => ch5() && !E.flag('c5_dock_board') },
     ],
     onEnter: async () => {
       if (!ch5() || E.flag('c5_dock_done')) return;
@@ -899,7 +899,7 @@
     E.set('c4_yui_ally');
     E.set('c5_niko_rescued');
     E.set('c5_done');
-    H.reward(300);
+    H.reward(500);
     await E.startChapter(6);
   }
 })();

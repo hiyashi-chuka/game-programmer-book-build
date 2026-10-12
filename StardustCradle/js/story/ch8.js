@@ -730,6 +730,7 @@
   });
 
   C8.coreScene = async function () {
+    G.state.objective = 'ヘルミナを止める';
     E.cut();
     E.stopBgm();
     await E.cg('starseed', '中心核。――そこには、星があった。');

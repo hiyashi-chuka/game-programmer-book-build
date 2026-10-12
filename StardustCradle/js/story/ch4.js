@@ -235,6 +235,15 @@
         },
       },
       {
+        id: 'c4_yui_shop', char: 'yui', x: 14, y: 3, dir: 'down', move: 'still', show: () => ch4() && ph() === 5,
+        talk: async () => {
+          await E.say('yui:smile', 'おかえりなさい。屋台は順調です。……お客さんに「委員長の湯切り、キレがある」と言われました。');
+          const i = await E.ask('yui', '一杯、食べていきますか？　関係者割引はありませんけど。', ['買う', 'やめておく'], { cancel: 1 });
+          if (i === 0) await E.shop(['ramen', 'onigiri', 'soda'], '星屑亭・出張店');
+          else await E.say('yui', '出し物めぐり、楽しんできてください。……わたしのぶんまで。');
+        },
+      },
+      {
         id: 'c4_ponta', char: 'ponta', x: 19, y: 5, dir: 'left', move: 'still', show: () => ch4() && ph() === 1,
         talk: async () => {
           const i = E.inc('c4_ponta_t') % 3;

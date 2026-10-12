@@ -124,7 +124,7 @@
       { x: 17, y: 6, r: 34, col: '#ffd090', a: 0.7, night: true },
       { x: 14, y: 7, r: 24, col: '#ffe0b0', a: 0.6, night: true },
     ],
-    warps: [{ x: 29, y: 11, w: 1, h: 2, to: 'minato', tx: 3, ty: 8, dir: 'right' }],
+    warps: [{ x: 29, y: 11, w: 1, h: 2, to: 'minato', tx: 3, ty: 8, dir: 'right', cond: () => !E.flag('c2_ruu_mode') }],
   });
 
   // =============================================================

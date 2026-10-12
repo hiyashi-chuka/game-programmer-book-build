@@ -37,14 +37,24 @@
     }
   }
   // 指定IDの敵を全部倒したら（このマップにいる間に）run
+  // （同じマップの E.reload() では途切れない。マップを出たら終わる。同じ組は二重に走らせない）
+  const watching = {};
   function whenCleared(ids, run) {
-    const m0 = F().map;
+    const mid = F().map.id;
+    const key = mid + ':' + ids.join(',');
+    if (watching[key]) return;
+    watching[key] = true;
+    const here = () => F().map && F().map.id === mid && !F().battle;
     (async () => {
-      await G.tasks.until(() => F().map !== m0 || ids.every((id) => E.flag('k_' + id)));
-      if (F().map !== m0) return;
-      await G.tasks.until(() => F().map !== m0 || (!G.ev.running && !G.ui.blocking() && !F().battle));
-      if (F().map !== m0) return;
-      G.ev.run(run);
+      try {
+        await G.tasks.until(() => (F().map && F().map.id !== mid) || ids.every((id) => E.flag('k_' + id)));
+        if (F().map.id !== mid) return;
+        await G.tasks.until(() => F().map.id !== mid || (here() && !G.ev.running && !G.ui.blocking()));
+        if (F().map.id !== mid) return;
+        G.ev.run(run);
+      } finally {
+        watching[key] = false;
+      }
     })();
   }
 
@@ -333,6 +343,7 @@
   }
 
   async function parkRescue() {
+    if (E.flag('c7_m_park')) return;
     E.cut(true);
     await E.say('kanata', 'もう大丈夫だ！ ケガしてないか？');
     await E.say('w_kenta', 'カナタ兄ちゃん……！ すげえ！ ロボット、ぜんぶやっつけた！');
