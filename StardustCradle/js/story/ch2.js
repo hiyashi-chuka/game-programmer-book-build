@@ -1555,8 +1555,10 @@
     await E.say('niko:smile', '……ごつ。');
     await E.say('kanata:grin', 'はは……よかった。');
     await E.say('kanata', '今日はドクのガレージに行こう。修理代のことと……ニコの身分証のこと、相談しないと。');
+    await E.say('ruu', '……ねえ。ドクのとこの前に、ひだまり園に寄ってもいい？');
+    await E.say('ruu:shy', 'チビたちに、ニコを会わせたいの。……べつに、あとでもいいけど。');
     E.cut(false);
-    E.objective('ドクのガレージへ（スクラップ・ベイ）※寄り道もOK');
+    E.objective('ドクのガレージへ（スクラップ・ベイ）／寄り道：ひだまり園（ミナト区・北西の路地の奥）');
   }
 
   // ---------- 4日目：ドクのガレージ ----------
@@ -1641,6 +1643,139 @@
     E.cut(false);
     await E.startChapter(3);
   }
+
+  // =============================================================
+  //  寄り道：ニコの「はじめて」（ミナト区・コンビニ・ひだまり園）
+  // =============================================================
+  const withNiko = () => C2() && G.state.party.includes('niko') && [7, 8, 14].includes(step());
+  G.addToMap('minato', {
+    events: [
+      {
+        x: 34, y: 33, w: 4, h: 1, once: 'c2_fl_canal', cond: withNiko,
+        run: async () => {
+          E.cut();
+          E.emote('f_niko', '!');
+          await E.say('niko', '……みず。きらきら、ひかってる。');
+          await E.say('ruu', 'ミナト運河。コロニーの水は、ぜんぶここを通って循環してるんだって。');
+          await E.say('niko', '……おさかな、いる？');
+          await E.say('kanata', 'いるいる。ロボットの魚だけどな。水をきれいにする掃除用のやつ。');
+          await E.say('niko', '……ロボの、おさかな。');
+          await E.say('niko:sad', '……つかまって、ここに、いれられたの？');
+          await E.say('ruu', '……さあね。でも、ほら。気持ちよさそうに泳いでるよ。');
+          await E.say('niko:smile', '……うん。ここ、ひろい、から。');
+          E.cut(false);
+        },
+      },
+      {
+        x: 56, y: 12, w: 6, h: 1, once: 'c2_fl_memorial', cond: withNiko,
+        run: async () => {
+          E.cut();
+          await E.say('niko', '……。');
+          E.emote('f_niko', '…');
+          await E.say('niko', '……ここ。たくさんの、こえ。');
+          await E.say('kanata', '……軌道戦争の慰霊碑だよ。10年前の戦争で、星になった人たちの。');
+          await E.say('niko', '……ないて、ない。……しずかに、ねむってる。');
+          await E.say('niko', 'でも……ひとつだけ、まだ、おきてる、こえ。……「まだ、おわってない」って。');
+          await E.say('ruu', '……ニコ？');
+          await E.say('niko:smile', '……なんでも、ない。おはな、きれい。');
+          E.cut(false);
+        },
+      },
+      {
+        x: 63, y: 14, w: 3, h: 1, once: 'c2_fl_taiyaki', cond: withNiko,
+        run: async () => {
+          E.cut();
+          E.emote('f_niko', '!');
+          await E.say('niko', '……おさかなの、おかし？');
+          const k = await E.ask('kanata', '（ニコが、たい焼き屋台をじっと見ている）', ['たい焼きを買ってあげる（¢30）', '晩ごはん前だから、ガマン']);
+          if (k === 0 && G.state.money >= 30) {
+            E.money(-30);
+            await E.say('niko:smile', '……あたまから、たべる。');
+            await E.say('niko', '…………しっぽ、あんこ、ない。');
+            await E.say('ruu:grin', 'それ、しっぽまであんこ入ってるかどうかで、店の良し悪しがわかるらしいよ。');
+            await E.say('niko:smile', '……じゃあ、つぎは、しっぽから、たべる。');
+          } else {
+            await E.say('niko:sad', '……がまん。');
+            await E.say('ruu', 'えらいえらい。ばあちゃんのラーメンが待ってるよ。');
+          }
+          E.cut(false);
+        },
+      },
+    ],
+  });
+  G.addToMap('konbini', {
+    onEnter: async () => {
+      if (!withNiko() || E.flag('c2_fl_konbini')) return;
+      E.set('c2_fl_konbini');
+      E.cut();
+      E.emote('f_niko', '!');
+      await E.say('niko:surprise', '……ドア、かってに、あいた……！');
+      await E.say('niko', '……あれ。ひかる、あめ。いっぱい。');
+      await E.say('ruu', 'ネオンキャンディ。なめると舌が光るやつ。……ほしいの？');
+      const k = await E.ask('kanata', '（ニコの目が、キャンディの棚に釘づけだ）', ['1本買ってあげる（¢20）', '……虫歯になるぞ']);
+      if (k === 0 && G.state.money >= 20) {
+        E.money(-20);
+        await E.say('niko:smile', '……！　……したが、ぴかぴか。');
+        await E.say('ruu:grin', 'あははっ、ほんとに光ってる！');
+        await E.say('w_clerk', '（店員さんが笑いをこらえている……）');
+      } else {
+        await E.say('niko:sad', '……むしば。こわい。');
+        await E.say('kanata', '……今度、ご褒美に買ってやるよ。');
+      }
+      E.cut(false);
+    },
+  });
+  // 4日目：ひだまり園でチビたちとニコ
+  G.addToMap('c2_hidamari', {
+    onEnter: async () => {
+      if (!(at(14) && G.state.party.includes('ruu') && !E.flag('c2_visit_home'))) return;
+      E.set('c2_visit_home');
+      E.cut();
+      E.party([]);
+      put('c2_ruu', 'ruu', 11, 11, 'up');
+      put('c2_niko', 'niko', 9, 11, 'up');
+      E.teleport('player', 10, 12, 'up');
+      E.bgm('home');
+      await E.say('c2_haru', 'あーっ！　ルウねえちゃん！　……と、だれ！？');
+      await E.say('c2_shota', '男だ！　ルウ姉が男つれてきた！　カレシだ！');
+      await E.say('ruu:angry', 'ちがう！！　ただのクラスメイト！');
+      await E.say('kanata:grin', 'ど、どうも。カナタです。ただのクラスメイトです……。');
+      await E.say('c2_shota', 'ほんとにー？　……あれ、にいちゃんの腰のスパナ、カッコいい！　機械いじりすんの！？');
+      await E.say('kanata:grin', 'お、わかる？　これは父さんの形見でさ──');
+      await E.say('ruu', '話が長くなるからやめて。……それより、みんな。この子が、ニコ。');
+      await E.say('niko', '……ニコ、です。');
+      await E.say('c2_haru', 'かみ、まっしろ！　ゆきみたい！　さわっていい？');
+      await E.say('niko:smile', '……いい、よ。');
+      await E.wait(20);
+      put('c2_mio2', 'c2_mio', 5, 11, 'right');
+      E.remove('c2_mio_n');
+      await E.say(null, '部屋のすみで、ミオがこっちをじっと見ている。');
+      await E.move('c2_niko', [[6, 11]], { speed: 0.6 });
+      E.face('c2_niko', 'left');
+      await E.say('niko', '……となり、いい？');
+      await E.say('c2_mio', '……。');
+      await E.say('niko', '……ニコも、あたらしい、こ。……まだ、しらないこと、いっぱい。');
+      await E.say('c2_mio', '……おねえちゃんも、ひとり？');
+      await E.say('niko', '……ううん。');
+      await E.say('niko:smile', 'いまは、ひとりじゃ、ない。……ミオも。');
+      await E.wait(30);
+      E.emote('c2_mio2', '♪');
+      await E.say('c2_mio:smile', '……うん。');
+      await E.say('ruu:surprise', '（……ミオが、笑った）');
+      await E.say('c2_encho:smile', '……春瀬さん、でしたね。ルウがいつもお世話になってます。');
+      await E.say('c2_encho', 'あの子がお友だちを連れてくるなんて、初めてなのよ。……これからも、仲良くしてあげてね。');
+      await E.say('kanata', 'あ、はい！　……オレのほうこそ、いつも助けられてます。');
+      await E.say('ruu:shy', '……っ、もう帰るよ！　ほら、ドクのとこ行くんでしょ！');
+      await E.say('c2_encho:smile', 'はいはい。これ、おやつのおにぎり。みんなで食べて。');
+      await E.give('onigiri', 3);
+      await E.say('c2_haru', 'ニコおねえちゃん、またきてね！');
+      await E.say('niko:smile', '……うん。また、くる。');
+      del('c2_ruu', 'c2_niko', 'c2_mio2');
+      E.party(['ruu', 'niko']);
+      E.reload();
+      E.cut(false);
+    },
+  });
 
   // デバッグ・テスト用
   G.C2 = { sceneNikoCollapse, sceneHomeGreet, sceneYuiHall, sceneNightTalk, sceneMorning, scenePatrol, sceneGate, sceneClassroom, sceneRooftop, scenePE, sceneBath, sceneEveningRuuLeaves, sceneRoof, sceneDay3Morning, sceneAfterSchoolDay3, sceneKyosuke, sceneShopEisen, sceneMoneyProblem, setStep };

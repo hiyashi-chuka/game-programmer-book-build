@@ -153,6 +153,51 @@
     ],
   });
 
+  // ---------- ネオン通りの寄り道（ニコと） ----------
+  const nikoNeon = () => C3() && step() >= 1 && step() <= 9 && G.state.party.includes('niko');
+  G.addToMap('neon', {
+    events: [
+      {
+        x: 16, y: 14, w: 3, h: 1, once: 'c3_fl_candy', cond: nikoNeon,
+        run: async () => {
+          E.cut();
+          E.emote('f_niko', '!');
+          await E.say('niko', '……ひかる、あめ……！　ここにも、ある……！');
+          await E.say('w2_candy', 'あっ、白い髪の子！　この前もいっぱい買ってくれたよね☆');
+          await E.say('ruu', '……ニコ、いつの間に。');
+          const k = await E.ask('kanata', '（ニコがこっちを見上げている……）', ['ネオンキャンディを3本買う（¢60）', '今日はがまん']);
+          if (k === 0 && G.state.money >= 60) {
+            E.money(-60);
+            await E.give('candy', 2);
+            await E.say('niko:smile', '……1ぽんは、いま。2ほんは、カナタに、あげる。たたかう、とき、なめて。');
+            await E.say('kanata:grin', '……ありがとな。');
+          } else {
+            await E.say('niko:sad', '……がまん。……つぎは、かう。');
+          }
+          E.cut(false);
+        },
+      },
+      {
+        x: 34, y: 11, w: 2, h: 1, once: 'c3_fl_uranai', cond: nikoNeon,
+        run: async () => {
+          E.cut();
+          await E.say('w2_uranai', 'ピピピ……ヨウコソ、迷エル子羊……。');
+          await E.say('w2_uranai', 'ピ……？　……ソコノ、白イ髪ノ、アナタ。');
+          await E.say('w2_uranai', '……アナタノ 運勢……検索中……検索中……。');
+          E.se('alarm');
+          E.shake(2, 20);
+          await E.say('w2_uranai', '……エラー。……S.C.0091。……S.C.0091。……空ガ……オチ……。');
+          await E.say('niko:sad', '……！');
+          await E.say('ruu:angry', 'ちょっと、なにこのポンコツ！　縁起でもない！');
+          await E.say('w2_uranai', '……ピピ。失礼シマシタ。再起動シマス。……今日ノ 運勢ハ 大吉。ラッキーアイテムハ、ラーメン。');
+          await E.say('niko', '……らーめん。……だいきち。');
+          await E.say('kanata:think', '（S.C.0091……？　今は0085年だろ。……壊れてるのかな）');
+          E.cut(false);
+        },
+      },
+    ],
+  });
+
   // ---------- レディオ・スターダスト：リリィ ----------
   G.addToMap('radio_booth', {
     onEnter: async () => {
