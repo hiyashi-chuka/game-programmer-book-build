@@ -823,7 +823,7 @@
       map: 'c8_core', x: 17, y: 19, dir: 'up', mech: true, mechId: 'harukaze2',
       enemies: [{ type: 'seraph', x: 17, y: 11, lv: 12, hp: C8.SERAPH_HP, boss: true, name: 'セラフィム（ヘルミナ）' }],
       allies: [ALLY.rose(14, 19)],
-      bgm: 'final', title: 'FINAL BATTLE', sub: 'セラフィムを止めろ！', win: 'boss',
+      bgm: 'final', title: 'FINAL BATTLE', sub: 'セラフィムを止めろ！', win: 'boss', quietWin: true,
       returnTo: ['c8_core', 17, 20, 'up'],
       onStart: async () => {
         E.tint(null);
