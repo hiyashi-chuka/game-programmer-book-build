@@ -823,6 +823,9 @@
   // ===============================================================
   //  帰還（星屑亭）→ 運河のシグ → 第6章へ
   // ===============================================================
+  // デバッグ・テスト用の入口
+  G.C5 = { planning: () => planning(), t1Open: () => t1Open(), wardenFight: () => wardenFight(), rescueNiko: () => rescueNiko(), dockScene: () => dockScene(), homecoming: () => homecoming() };
+
   async function homecoming() {
     setPh(8);
     E.time('night');
