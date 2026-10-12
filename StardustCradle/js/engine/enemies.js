@@ -174,7 +174,34 @@
         this.phase = 1;
       }
       this.solid = !d.float && type !== 'seraph';
-      this.dir = 'down';
+      this.dir = o.dir || 'down';
+      // 巡回ルートと視界（ステルス用）
+      if (o.patrol) {
+        this.patrol = o.patrol.map(([x, y]) => [x * 16 + 8, y * 16 + 14]);
+        this.pi = 0;
+        this.ai = 'patrol';
+        this.vision = o.vision || 72;
+        this.onSpot = o.onSpot;
+        this.contact = o.contact !== undefined ? o.contact : false;
+        this.invuln = o.invuln !== undefined ? o.invuln : true;
+      }
+    }
+    // 視界内にプレイヤーがいるか（前方±35°、距離vision、壁で遮られる）
+    sees(p) {
+      const dx = p.x - this.x,
+        dy = p.y - this.y,
+        d = Math.hypot(dx, dy);
+      if (d > this.vision) return false;
+      const [fx, fy] = G.DIRS[this.dir];
+      const cos = (dx * fx + dy * fy) / (d || 1);
+      if (cos < 0.82 && d > 14) return false;
+      const steps = Math.ceil(d / 8);
+      for (let i = 1; i < steps; i++) {
+        const x = this.x + (dx * i) / steps,
+          y = this.y - 6 + (dy * i) / steps;
+        if (G.field.map.isSolid(Math.floor(x / 16), Math.floor(y / 16))) return false;
+      }
+      return true;
     }
     get p() {
       return G.field.player;
@@ -273,6 +300,16 @@
         c.globalCompositeOperation = 'source-over';
       }
       if (this.type === 'seraph') return this.drawSeraph(c, ox, oy);
+      if (this.patrol && !this.dead) {
+        const [fx, fy] = G.DIRS[this.dir];
+        const a0 = Math.atan2(fy, fx);
+        c.fillStyle = this.spotted ? 'rgba(255,40,70,0.28)' : 'rgba(255,220,90,0.16)';
+        c.beginPath();
+        c.moveTo(this.x + ox, this.y - 6 + oy);
+        c.arc(this.x + ox, this.y - 6 + oy, this.vision, a0 - 0.6, a0 + 0.6);
+        c.closePath();
+        c.fill();
+      }
       if (this.telegraph > 0) {
         c.globalCompositeOperation = 'lighter';
         G.glow(c, this.x + ox, this.y - this.bodyH / 2 + oy, 22, 'rgba(255,60,90,0.5)');
@@ -297,6 +334,38 @@
 
   // ---------- AI ----------
   const AI = (G.AI = {});
+  AI.patrol = function (e) {
+    if (e.spotted) return false;
+    if (e.waitT > 0) {
+      e.waitT--;
+      if (e.waitT % 40 === 0) e.dir = G.pick(['up', 'down', 'left', 'right']);
+    } else {
+      const [tx, ty] = e.patrol[e.pi];
+      const dx = tx - e.x,
+        dy = ty - e.y,
+        d = Math.hypot(dx, dy);
+      const sp = e.spd * 0.7;
+      if (d <= sp) {
+        e.x = tx;
+        e.y = ty;
+        e.pi = (e.pi + 1) % e.patrol.length;
+        e.waitT = 50;
+      } else {
+        e.x += (dx / d) * sp;
+        e.y += (dy / d) * sp;
+        e.dir = G.dirFromVec(dx, dy);
+      }
+    }
+    const p = e.p;
+    if (!G.ev.running && p.visible && e.sees(p)) {
+      e.spotted = true;
+      e.emote = { sym: '!', t: 0, dur: 60 };
+      G.audio.se('alarm');
+      const cb = e.onSpot || G.field.mapDef().onSpotted;
+      if (cb) G.ev.run(() => cb(e));
+    }
+    return e.waitT <= 0;
+  };
   AI.charger = function (e) {
     const d = e.dist();
     if (e.state === 'idle') {

@@ -55,6 +55,19 @@
     p.dashT = 0;
     p.atkT = 0;
     p.invT = 30;
+    // 壁の中に置かれたら近くの歩ける場所へ
+    if (F.map.isSolid(tx, ty)) {
+      let found = false;
+      for (let r = 1; r < 8 && !found; r++)
+        for (let dy = -r; dy <= r && !found; dy++)
+          for (let dx = -r; dx <= r && !found; dx++)
+            if (!F.map.isSolid(tx + dx, ty + dy)) {
+              p.x = (tx + dx) * 16 + 8;
+              p.y = (ty + dy) * 16 + 14;
+              found = true;
+            }
+      if (G.debug || found) console.warn('player start on solid tile', id, tx, ty);
+    }
     F.ents.push(p);
     // 仲間
     F.followers = [];

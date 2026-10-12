@@ -16,65 +16,81 @@
     const img = c.createImageData(W, H);
     const d = img.data;
     const cx = W / 2,
-      cy = H * 0.46;
+      cy = H * 0.44;
     const night = variant === 'night' || variant === 'dark';
     const dusk = variant === 'dusk';
     const dark = variant === 'dark';
-    const fog = dark ? [20, 10, 30] : night ? [30, 30, 80] : dusk ? [255, 170, 140] : [200, 225, 255];
-    const sky1 = night ? [10, 10, 40] : dusk ? [255, 140, 120] : [120, 190, 250];
-    const sky2 = night ? [40, 30, 90] : dusk ? [255, 210, 160] : [210, 240, 255];
+    const fog = dark ? [24, 12, 36] : night ? [36, 34, 90] : dusk ? [255, 186, 150] : [205, 228, 255];
+    const sky1 = night ? [8, 8, 34] : dusk ? [250, 130, 120] : [110, 180, 250];
+    const sky2 = night ? [36, 26, 86] : dusk ? [255, 214, 170] : [215, 242, 255];
     const dither = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    const K = 5200; // 奥行き係数
+    const DB = 0.55; // 奥行き方向のブロック密度
+    const SEC = Math.PI / 3;
+    // 陸の色（ブロック単位）
+    function landCol(bu, bv, si, fu, fv) {
+      const h = G.hash(bu, bv, si);
+      const avenue = bu % 6 === 0;
+      const road = fu < 0.12 || fv < 0.12 || avenue;
+      const riverU = 21; // 中央の運河
+      if (Math.abs(bu - riverU) <= 0) return night ? [26, 44, 100] : dusk ? [200, 140, 160] : [70, 140, 215];
+      if (road) {
+        if (night) return G.hash(bu, bv, 9) > 0.55 ? [255, 196, 120] : [70, 62, 110];
+        return avenue ? [196, 190, 200] : [176, 172, 184];
+      }
+      if (h < 0.22) return night ? [20, 44, 44] : [96, 176, 92]; // 公園
+      if (h < 0.3) return night ? [28, 30, 60] : [210, 120, 110]; // 赤い屋根
+      if (night) {
+        if (G.hash(bu * 3 + Math.floor(fu * 3), bv * 3 + Math.floor(fv * 3), 7) > 0.62) return G.hash(bu, bv, 8) > 0.85 ? [255, 120, 200] : [255, 222, 150];
+        return [30, 28, 62];
+      }
+      const tone = 150 + Math.floor(h * 70);
+      const lit = fu < 0.5 ? 14 : -10; // 屋根の陰影
+      return [tone + lit, tone - 6 + lit, tone + 12 + lit];
+    }
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const dx = x - cx,
-          dy = (y - cy) * 1.15;
+          dy = (y - cy) * 1.12;
         const r = Math.hypot(dx, dy);
         let th = Math.atan2(dy, dx);
         if (th < 0) th += Math.PI * 2;
-        const z = 1400 / Math.max(r, 1); // 奥行き
-        const fogK = 1 - Math.exp(-z * 0.012);
-        const sec = (th - Math.PI / 3 + Math.PI * 4) % (Math.PI * 2);
-        const si = Math.floor(sec / (Math.PI / 3));
-        const u = (sec % (Math.PI / 3)) / (Math.PI / 3);
-        let col;
+        const z = K / Math.max(r, 1);
+        const fogK = 1 - Math.exp(-z * 0.0045);
+        const sec = (th - SEC + Math.PI * 4) % (Math.PI * 2);
+        const si = Math.floor(sec / SEC);
+        const u = (sec % SEC) / SEC;
         const bth = dither[(y % 4) * 4 + (x % 4)] / 16;
-        if (r < 10) col = night ? [200, 220, 255] : [255, 255, 240];
+        let col;
+        if (r < 8) col = night ? [210, 225, 255] : [255, 255, 245];
         else if (si % 2 === 0) {
-          // 陸
-          const bu = u * 14,
-            bv = z * 0.08;
+          const bu = u * 42,
+            bv = z * DB;
           const fu = bu - Math.floor(bu),
             fv = bv - Math.floor(bv);
-          const h = G.hash(Math.floor(bu), Math.floor(bv), si);
-          const road = fu < 0.1 || fv < 0.08;
-          const river = Math.abs(u - 0.5) < 0.025 && si === 0;
-          if (river) col = night ? [30, 50, 110] : [80, 150, 220];
-          else if (road) col = night ? (h > 0.5 ? [255, 200, 120] : [90, 80, 120]) : [180, 175, 190];
-          else if (h < 0.3) col = night ? [20, 40, 40] : [90, 170, 90]; // 公園
-          else {
-            const tone = 140 + Math.floor(h * 80);
-            col = night ? [30, 28, 60] : [tone, tone - 10, tone + 10];
-            if (night && G.hash(Math.floor(bu * 3), Math.floor(bv * 5), 7) > 0.6) col = G.hash(Math.floor(bu * 3), 1, Math.floor(bv * 5)) > 0.8 ? [255, 120, 200] : [255, 220, 150];
-            if (!night && G.hash(Math.floor(bu * 4), Math.floor(bv * 4), 3) > 0.8) col = [235, 120, 110]; // 屋根
+          // ブロックの画面上の大きさ（小さすぎると平均色）
+          const pxPerBlock = (r * r) / (K * DB);
+          col = landCol(Math.floor(bu), Math.floor(bv), si, fu, fv);
+          if (pxPerBlock < 3) {
+            const avg = night ? [44, 40, 80] : dusk ? [200, 160, 160] : [158, 168, 170];
+            const t = 1 - pxPerBlock / 3;
+            col = col.map((v, i) => v + (avg[i] - v) * t);
           }
-          // 窓（ミラー）際は明るい
           const edge = Math.min(u, 1 - u);
-          if (!night && edge < 0.08) col = col.map((v) => Math.min(255, v + 30));
+          if (!night && edge < 0.05) col = col.map((v) => Math.min(255, v + 26));
+          if (edge < 0.012) col = night ? [60, 60, 96] : [130, 136, 160];
         } else {
-          // 窓（宇宙が見える／昼はミラー光で空色）
           const g = Math.abs(u - 0.5) * 2;
-          col = sky1.map((v, i) => v + (sky2[i] - v) * (1 - g));
-          if (night) {
-            if (G.hash(x, y, 77) > 0.985) col = [255, 255, 255];
-          } else if (Math.abs(u - 0.5) < 0.04) col = col.map((v) => Math.min(255, v + 25));
-          // 窓枠
-          if (Math.abs(u - 0.5) > 0.47 || (Math.floor(z * 0.15) % 6 === 0 && (z * 0.15) % 1 < 0.15)) col = night ? [50, 50, 80] : [150, 160, 190];
+          col = sky1.map((v, i) => v + (sky2[i] - v) * (1 - g * g));
+          if (night && G.hash(x, y, 77) > 0.982) col = [255, 255, 255];
+          if (!night && Math.abs(u - 0.5) < 0.05) col = col.map((v) => Math.min(255, v + 22));
+          // 窓の桟（奥行き方向に一定間隔）
+          const rib = (z * 0.012) % 1;
+          if (Math.abs(u - 0.5) > 0.46 || rib < 0.05) col = night ? [46, 46, 78] : dusk ? [200, 150, 160] : [150, 166, 196];
         }
-        // 霧
-        const fk = Math.min(1, fogK + bth * 0.06);
-        col = col.map((v, i) => v + (fog[i] - v) * fk * (dark ? 0.6 : 0.85));
-        // ポスタライズ（ドットらしさ）
-        const q = 12;
+        const fk = Math.min(1, fogK + bth * 0.05);
+        col = col.map((v, i) => v + (fog[i] - v) * fk * (dark ? 0.55 : 0.9));
+        const q = 10;
         const i4 = (y * W + x) * 4;
         d[i4] = Math.round(col[0] / q + bth - 0.5) * q;
         d[i4 + 1] = Math.round(col[1] / q + bth - 0.5) * q;
@@ -82,6 +98,10 @@
         d[i4 + 3] = 255;
       }
     c.putImageData(img, 0, 0);
+    // 中心（遠端キャップ）の光
+    c.globalCompositeOperation = 'lighter';
+    G.glow(c, cx, cy, 70, night ? 'rgba(140,160,255,0.25)' : dusk ? 'rgba(255,200,150,0.35)' : 'rgba(255,255,230,0.4)');
+    c.globalCompositeOperation = 'source-over';
     cache[key] = cv;
     return cv;
   }
@@ -140,15 +160,15 @@
 
   CG.colony = (c, t) => {
     c.drawImage(colonyView('day'), 0, 0);
-    clouds(c, t, W / 2, H * 0.46, false);
+    clouds(c, t, W / 2, H * 0.44, false);
   };
   CG.colony_dusk = (c, t) => {
     c.drawImage(colonyView('dusk'), 0, 0);
-    clouds(c, t, W / 2, H * 0.46, false);
+    clouds(c, t, W / 2, H * 0.44, false);
   };
   CG.colony_night = (c, t) => {
     c.drawImage(colonyView('night'), 0, 0);
-    clouds(c, t, W / 2, H * 0.46, true);
+    clouds(c, t, W / 2, H * 0.44, true);
     twinkle(c, t);
   };
   CG.colony_dark = (c, t) => {
@@ -159,7 +179,7 @@
   };
   CG.rooftop = (c, t) => {
     c.drawImage(colonyView('dusk'), 0, 0);
-    clouds(c, t, W / 2, H * 0.46, false);
+    clouds(c, t, W / 2, H * 0.44, false);
     rooftop(c, false);
   };
   CG.rooftop_night = (c, t) => {
@@ -169,7 +189,7 @@
   };
   CG.title = (c, t) => {
     c.drawImage(colonyView('dusk'), 0, 0);
-    clouds(c, t, W / 2, H * 0.46, false);
+    clouds(c, t, W / 2, H * 0.44, false);
     rooftop(c, false);
   };
   function twinkle(c, t) {
@@ -227,12 +247,12 @@
     }
     // ミラー（3枚）
     for (const s of [-1, 0, 1]) {
-      c.fillStyle = 'rgba(200,230,255,0.55)';
+      c.fillStyle = 'rgba(190,220,255,0.28)';
       c.beginPath();
-      c.moveTo(-L / 2 + 10, s * R * 0.7);
-      c.lineTo(L / 2 - 10, s * R * 0.7);
-      c.lineTo(L / 2 + 60 * scale, s * R * 2.6);
-      c.lineTo(-L / 2 + 40 * scale, s * R * 2.6);
+      c.moveTo(-L / 2 + 10, s * R * 0.8);
+      c.lineTo(L / 2 - 10, s * R * 0.8);
+      c.lineTo(L / 2 + 20 * scale, s * R * 1.9);
+      c.lineTo(-L / 2 + 30 * scale, s * R * 1.9);
       c.fill();
     }
     // 端のキャップと港
@@ -424,7 +444,7 @@
     c.globalCompositeOperation = 'lighter';
     G.glow(c, W / 2, H * 0.46, 40 + k * 200, `rgba(255,230,180,${0.4 * k})`);
     c.globalCompositeOperation = 'source-over';
-    clouds(c, t, W / 2, H * 0.46, false);
+    clouds(c, t, W / 2, H * 0.44, false);
     rooftop(c, false);
   };
   // ---------- ラジオ局 ----------

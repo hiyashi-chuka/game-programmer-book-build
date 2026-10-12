@@ -43,6 +43,7 @@
     return r;
   };
   E.choice = (choices, opt) => UI().choice(choices, opt);
+  E.timing = (opt) => UI().timing(opt);
   E.notice = (text, opt) => UI().notice(text, opt);
   E.toast = (text, col) => UI().toast(text, col);
 

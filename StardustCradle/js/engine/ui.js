@@ -118,7 +118,7 @@
       w.update = function () {
         w.t++;
         const full = w.pages[w.page];
-        const sp = [0.5, 1, 2, 4][G.settings.textSpeed] || 1;
+        const sp = [0.35, 0.7, 1.5, 4][G.settings.textSpeed] || 0.7;
         if (w.shown < full.length) {
           const before = Math.floor(w.shown);
           w.shown = Math.min(full.length, w.shown + sp);
@@ -256,6 +256,82 @@
           y = G.H / 2 - hh / 2 - 20;
         G.panel(c, x, y, ww, hh, { accent: opt.col || C.gold });
         lines.forEach((l, i) => G.drawText(c, l, G.W / 2, y + 11 + i * 16, { size: 11, align: 'center', color: opt.textCol || '#ffffff' }));
+      };
+      UI.push(w);
+    });
+  };
+
+  // =============================================================
+  //  タイミング・ミニゲーム（ラーメン作り、機体起動、ハッキング等）
+  // =============================================================
+  // opt: {title, rounds:3, speed:1.6, zone:0.18, labels:['麺','スープ','具'], col}
+  // 戻り値：成功した回数
+  UI.timing = function (opt) {
+    opt = opt || {};
+    return new Promise((resolve) => {
+      const rounds = opt.rounds || 3;
+      const w = { round: 0, pos: 0, dir: 1, ok: 0, res: [], t: 0, wait: 0, zone: [0, 0] };
+      const newZone = () => {
+        const z = opt.zone || 0.18;
+        const a = G.rand(0.1, 0.9 - z);
+        w.zone = [a, a + z];
+        w.pos = 0;
+        w.dir = 1;
+      };
+      newZone();
+      w.update = function () {
+        w.t++;
+        if (w.wait > 0) {
+          if (--w.wait === 0) {
+            if (w.round >= rounds) {
+              UI.pop(w);
+              resolve(w.ok);
+              return;
+            }
+            newZone();
+          }
+          return;
+        }
+        const sp = (opt.speed || 1.6) * (1 + w.round * 0.15) * 0.012;
+        w.pos += sp * w.dir;
+        if (w.pos > 1) {
+          w.pos = 1;
+          w.dir = -1;
+        }
+        if (w.pos < 0) {
+          w.pos = 0;
+          w.dir = 1;
+        }
+        if (I.pressed('ok')) {
+          const hit = w.pos >= w.zone[0] && w.pos <= w.zone[1];
+          w.res.push(hit);
+          if (hit) {
+            w.ok++;
+            G.audio.se('ok');
+          } else G.audio.se('buzz');
+          w.round++;
+          w.wait = 40;
+        }
+      };
+      w.drawHi = function (c) {
+        const x = 90,
+          y = 100,
+          ww = 300;
+        G.panel(c, x - 20, y - 40, ww + 40, 110, { title: opt.title || 'TIMING', accent: opt.col || C.gold });
+        const lab = (opt.labels || [])[Math.min(w.round, rounds - 1)] || 'タイミングよくZ！';
+        G.drawText(c, lab, G.W / 2, y - 26, { size: 11, align: 'center' });
+        c.fillStyle = 'rgba(0,0,0,0.6)';
+        c.fillRect(x, y, ww, 14);
+        c.fillStyle = 'rgba(125,255,154,0.55)';
+        c.fillRect(x + w.zone[0] * ww, y, (w.zone[1] - w.zone[0]) * ww, 14);
+        c.fillStyle = '#ffffff';
+        c.fillRect(x + w.pos * ww - 1, y - 4, 3, 22);
+        for (let i = 0; i < rounds; i++) {
+          const r = w.res[i];
+          c.fillStyle = r === undefined ? 'rgba(255,255,255,0.2)' : r ? C.green : C.red;
+          c.fillRect(G.W / 2 - rounds * 9 + i * 18, y + 28, 12, 12);
+        }
+        if (w.wait > 0) G.drawText(c, w.res[w.res.length - 1] ? 'GOOD!' : 'MISS…', G.W / 2, y + 48, { size: 12, align: 'center', color: w.res[w.res.length - 1] ? C.green : C.red });
       };
       UI.push(w);
     });

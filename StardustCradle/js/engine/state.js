@@ -187,7 +187,7 @@
     return Math.floor(s / 3600) + ':' + String(Math.floor((s % 3600) / 60)).padStart(2, '0');
   };
   // 設定
-  G.settings = { music: 0.55, sfx: 0.6, textSpeed: 2, crt: true };
+  G.settings = { music: 0.55, sfx: 0.6, textSpeed: 1, crt: true };
   try {
     Object.assign(G.settings, JSON.parse(localStorage.getItem(KEY + 'settings') || '{}'));
   } catch (e) {}

@@ -387,3 +387,24 @@ node tools/playtest.js "chapter=3" out.png '[{"until":"!G.ev.running && !G.ui.bl
 出力の `errors: 0` を必ず確認すること。`[pageerror]` は必ず直す。
 キー：矢印・`z`（決定/攻撃）・`x`（ダッシュ）・`c`（スキル）・`Escape`（メニュー）。
 `{"js":"..."}` で `G.state`、`G.field.player.x` などを調べられる。
+
+---
+
+## 5. 追加のゲーム要素
+
+### タイミング・ミニゲーム
+```js
+const score = await E.timing({ title: 'ラーメン作り', rounds: 3, speed: 1.6, zone: 0.18, labels: ['麺をゆでる！', 'スープを注ぐ！', '具をのせる！'] });
+// score = 成功回数（0〜rounds）。ラーメン屋の手伝い、機体の起動シーケンス、ハッキング、文化祭の屋台などに。
+```
+
+### ステルス（巡回する見張り）
+`enemies` / `E.enemy()` に `patrol` を付けると、決まったルートを巡回し、前方の扇形の視界（壁で遮られる）にプレイヤーが入ると発見する。
+```js
+enemies: [ { type: 'guard', x: 10, y: 5, patrol: [[10,5],[20,5],[20,9]], vision: 72, dir: 'right' } ],
+onSpotted: async (e) => {            // マップ定義に書く（または敵ごとに onSpot）
+  await E.say('guard', 'そこにいるのは誰だ！');
+  await E.warp(G.field.map.id, 3, 12, 'up');   // スタート地点に戻すなど
+},
+```
+巡回中の見張りは既定で無敵・接触ダメージなし（`invuln:false, contact:true` で通常の敵にもできる）。

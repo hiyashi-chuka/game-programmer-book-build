@@ -105,15 +105,17 @@
       G.drawText(c, '※ 音が鳴ります', G.W / 2, 168, { size: 8, align: 'center', color: G.UI.dim, outline: '#0a0620' });
     } else if (T.mode === 'menu') {
       const opts = T.opts();
-      G.panel(c, G.W / 2 - 64, 132, 128, opts.length * 18 + 10, {});
+      const mx = G.W - 136,
+        my = 130;
+      G.panel(c, mx, my, 120, opts.length * 18 + 10, {});
       opts.forEach((o, i) => {
-        const y = 138 + i * 18;
+        const y = my + 6 + i * 18;
         const dis = i === 1 && !G.hasAnySave();
         if (i === T.sel) {
           c.fillStyle = G.UI.sel;
-          c.fillRect(G.W / 2 - 60, y - 2, 120, 16);
+          c.fillRect(mx + 4, y - 2, 112, 16);
         }
-        G.drawText(c, o, G.W / 2, y, { size: 11, align: 'center', color: dis ? '#5a5478' : i === T.sel ? '#ffffff' : G.UI.dim });
+        G.drawText(c, o, mx + 60, y, { size: 11, align: 'center', color: dis ? '#5a5478' : i === T.sel ? '#ffffff' : G.UI.dim });
       });
     } else if (T.mode === 'settings') {
       const s = G.settings;
