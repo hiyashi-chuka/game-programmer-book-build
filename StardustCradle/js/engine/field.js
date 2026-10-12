@@ -248,6 +248,16 @@
         best = e;
       }
     }
+    // カウンター越し：正面のタイルが壁/台なら、もう1マス先のNPCにも話しかけられる
+    if (!best) {
+      const [fx2, fy2] = p.frontPoint(28);
+      const [fx1, fy1] = p.frontPoint(14);
+      if (F.map.isSolid(Math.floor(fx1 / 16), Math.floor((fy1 + 2) / 16)))
+        for (const e of F.ents) {
+          if (!(e instanceof G.NPC) || !e.talk || !e.visible) continue;
+          if (Math.hypot(e.x - fx2, e.y - 4 - fy2) < 15) best = e;
+        }
+    }
     if (best) {
       const npc = best;
       G.ev.run(async () => {

@@ -3,6 +3,57 @@
 //  ワールド担当 part1。町の人・サブクエストは story/side_w1.js
 // =============================================================
 (function () {
+  // ---------- このファイル用の追加小物（エンジンは変更せず G.PROPS に追加） ----------
+  const r = G.rect,
+    px = G.px;
+  if (!G.PROPS.w_chimney)
+    G.PROPS.w_chimney = function (o) {
+      // 銭湯の煙突（屋根の奥から立ち上がる）。足元は屋根の上なので判定なし
+      const H2 = o.hgt || 104;
+      const cv = G.makeCanvas(16, H2);
+      const c = cv.ctx;
+      const col = '#e4e0dc';
+      r(c, 3, 4, 10, H2 - 4, col);
+      r(c, 3, 4, 3, H2 - 4, G.shade(col, 0.15));
+      r(c, 10, 4, 3, H2 - 4, G.shade(col, -0.25));
+      for (let y = 10; y < H2; y += 6) r(c, 3, y, 10, 1, G.shade(col, -0.12));
+      r(c, 2, 0, 12, 5, '#c03030');
+      r(c, 2, 0, 12, 1, '#e86060');
+      r(c, 2, 8, 12, 3, '#c03030');
+      const t = o.text || 'YU';
+      for (let i = 0; i < t.length; i++) G.pixText(c, t[i], 6, 16 + i * 7, '#2a3a8a');
+      r(c, 0, H2 - 6, 16, 6, 'rgba(20,10,40,0.25)');
+      return { w: 1, h: o.foot || 6, img: cv, ox: 0, oy: o.oy !== undefined ? o.oy : -(H2 - 20), solid: false, lights: [{ x: 8, y: -(H2 - 22), r: 6, col: '#ff3050', a: 0.8, blink: true }] };
+    };
+  if (!G.PROPS.w_noren)
+    G.PROPS.w_noren = function (o) {
+      // 文字を指定できるのれん（湯・男・女など英字のみ）
+      const cv = G.makeCanvas(16, 12);
+      const c = cv.ctx;
+      const col = o.col || '#2a3a7a';
+      for (let i = 0; i < 3; i++) r(c, i * 5 + 1, 0, 4, 12, col);
+      r(c, 0, 0, 16, 1, G.shade(col, -0.4));
+      G.pixText(c, o.text || 'YU', 8 - G.pixTextW(o.text || 'YU') / 2, 4, '#ffffff');
+      return { w: 1, h: 1, img: cv, ox: 0, oy: -2, solid: false, flat: true, above: true };
+    };
+  if (!G.PROPS.w_lantern)
+    G.PROPS.w_lantern = function (o) {
+      // 赤ちょうちん（壁に掛ける）
+      const col = o.col || '#e03a2a';
+      const cv = G.makeCanvas(16, 22);
+      const c = cv.ctx;
+      r(c, 7, 0, 2, 3, '#3a2a2a');
+      r(c, 4, 3, 8, 2, '#2a1a1a');
+      G.ellipse(c, 8, 11, 5, 6, col);
+      G.ellipse(c, 7, 9, 2, 3, G.shade(col, 0.35));
+      for (let y = 7; y < 17; y += 3) r(c, 3, y, 10, 1, G.shade(col, -0.25));
+      r(c, 4, 17, 8, 2, '#2a1a1a');
+      px(c, 8, 20, '#2a1a1a');
+      return { w: 1, h: 1, img: cv, ox: 0, oy: -20, solid: false, lights: [{ x: 8, y: -10, r: 20, col: '#ff7040', a: 0.85, flicker: true }] };
+    };
+})();
+
+(function () {
   // ---------- 地形ビルダー ----------
   const W = 72,
     H = 48;
@@ -31,7 +82,7 @@
   fill(38, 22, 1, 3, 'z');
   // --- 北西の住宅路地 ---
   fill(0, 8, 34, 2, '-');
-  fill(0, 7, 1, 4, 'B');
+  fill(0, 7, 1, 4, 'H');
   // 北側の並木（大通りぞい）
   fill(32, 0, 1, 21, '.');
   fill(39, 0, 1, 7, '.');
@@ -61,8 +112,8 @@
   fill(0, 44, 72, 2, '-');
   fill(0, 47, 72, 1, 'H');
   fill(34, 47, 4, 1, '-');
-  fill(0, 43, 1, 4, 'B');
-  fill(71, 43, 1, 4, 'B');
+  fill(0, 43, 1, 4, 'H');
+  fill(71, 43, 1, 4, 'H');
   // 運河ぞい南の緑地帯
   // --- 北東：交番まわりと公園 ---
   fill(40, 8, 6, 8, '=');
@@ -97,10 +148,10 @@
   fill(47, 37, 1, 6, 'F');
   fill(41, 41, 5, 2, 'x');
   // 西端・東端の植え込み
-  set(0, 21, 'B');
-  set(0, 25, 'B');
-  set(71, 21, 'B');
-  set(71, 25, 'B');
+  set(0, 21, 'H');
+  set(0, 25, 'H');
+  set(71, 21, 'H');
+  set(71, 25, 'H');
 
   // ---------- 小物を地形に ----------
   // 北の並木（桜）
@@ -112,20 +163,26 @@
   for (const x of [2, 9, 18, 26, 31]) set(x, 21, 'L');
   for (const x of [40, 49, 55, 63, 70]) set(x, 21, 'L');
   for (const x of [4, 12, 21, 29, 41, 50, 62, 69]) set(x, 25, 'L');
-  for (const x of [3, 11, 19, 27, 44, 50, 54, 65]) set(x, 30, 'L');
+  for (const x of [0, 11, 19, 27, 44, 50, 54, 65]) set(x, 30, 'L');
   for (const x of [4, 12, 20, 28, 44, 52, 62, 69]) set(x, 36, 'L');
   for (const x of [3, 14, 25, 50, 60, 68]) set(x, 43, 'L');
   for (const y of [13, 29, 39]) set(33, y, 'L'), set(38, y, 'L');
   for (const x of [44, 52, 61, 70]) set(x, 7, 'L');
   // 公園の木
-  for (const [x, y] of [[47, 9], [52, 9], [53, 11], [47, 11], [50, 12], [63, 9], [64, 11], [69, 9], [70, 11], [68, 13], [70, 17], [62, 18], [64, 19], [53, 19], [47, 19], [51, 15]]) set(x, y, 'Y');
+  for (const [x, y] of [[47, 9], [52, 9], [53, 11], [47, 11], [50, 12], [63, 9], [64, 11], [69, 9], [70, 11], [68, 13], [70, 17], [62, 18], [64, 19], [47, 19], [51, 15]]) set(x, y, 'Y');
   for (const [x, y] of [[66, 12], [70, 14]]) set(x, y, 'T');
   // 生け垣の中の植え込み
   for (const [x, y] of [[54, 18], [61, 18], [53, 12], [64, 12]]) set(x, y, 'q');
   // 裏庭（北西）の木・植え込み
-  for (const [x, y] of [[1, 11], [4, 12], [9, 11], [16, 12], [19, 11], [24, 11], [28, 12], [31, 11], [21, 13], [13, 12]]) set(x, y, 'T');
-  for (const [x, y] of [[2, 13], [5, 11], [10, 12], [17, 14], [26, 13], [30, 14], [23, 14]]) set(x, y, 'b');
-  for (const [x, y] of [[12, 11], [14, 13], [27, 11]]) set(x, y, 'q');
+  for (const [x, y] of [[1, 11], [4, 12], [8, 11], [24, 11], [28, 12], [31, 11], [21, 13], [14, 11]]) set(x, y, 'T');
+  for (const [x, y] of [[2, 13], [5, 11], [26, 13], [30, 14], [23, 14], [15, 13]]) set(x, y, 'b');
+  for (const [x, y] of [[27, 11], [20, 12]]) set(x, y, 'q');
+  // 星屑亭の裏の家庭菜園
+  fill(9, 11, 4, 2, 'o');
+  // 裏の空き地（土管がわりのタイヤ・ベンチ）
+  fill(16, 11, 5, 4, ':');
+  set(16, 11, 'G');
+  set(17, 11, 'G');
   // 抜け道の自販機
   set(7, 12, 'V');
   set(6, 16, 'j');
@@ -179,7 +236,7 @@
   // 商店街・北側
   bld(0, 15, 6, 6, { style: 'shop', sign: 'BAKERY', signCol: '#c06a2a', awning: '#f08a30', door: 3, seed: 21 }, '〈ベーカリー・こむぎ〉。焼きたてのメロンパンの匂い！ ……今日はもう売り切れらしい。');
   bld(8, 14, 7, 7, {
-    style: 'house', roof: 'tile', roofCol: '#2e3a6a', wall: '#f2e6cc', sign: 'RAMEN', signCol: '#c03030', signScale: 2,
+    style: 'house', roof: 'tile', roofCol: '#8a3434', wall: '#f2e6cc', sign: 'RAMEN', signCol: '#c03030', signScale: 2,
     doorType: 'noren', norenText: 'RA', norenCol: '#c03030', door: 3, seed: 22, to: 'hoshikuzu', tx: 7, ty: 10, dir: 'up',
   });
   bld(15, 16, 6, 5, { style: 'shop', sign: 'CAFE', signCol: '#2a8a80', awning: '#3ac0b0', door: 2, seed: 23 }, '〈喫茶ミラーボール〉。「準備中」の札。マスターがコーヒー豆を挽いている。');
@@ -301,13 +358,39 @@
     // AF置き場
     { p: 'container', x: 42, y: 38, col: '#d06a3a', text: 'CR7' },
     { p: 'sign', x: 47, y: 43, text: 'DANGER', col: '#e8c040', msg: '「工事中・立入注意」——ワークフレーム作業中。' },
-    { p: 'hangar', x: 43, y: 41 }
+    { p: 'hangar', x: 43, y: 41 },
+    // 裏庭の小物
+    { p: 'w_crop', x: 9, y: 11, kind: 'sprout', v: 1 },
+    { p: 'w_crop', x: 10, y: 11, kind: 'sprout', v: 2 },
+    { p: 'w_crop', x: 11, y: 11, kind: 'carrot', v: 3 },
+    { p: 'w_crop', x: 12, y: 11, kind: 'cabbage', v: 4 },
+    { p: 'w_crop', x: 9, y: 12, kind: 'cabbage', v: 5 },
+    { p: 'w_crop', x: 10, y: 12, kind: 'cabbage', v: 6 },
+    { p: 'w_crop', x: 11, y: 12, kind: 'carrot', v: 7 },
+    { p: 'w_crop', x: 12, y: 12, kind: 'sprout', v: 8 },
+    { p: 'sign', x: 13, y: 12, text: 'TOME', col: '#c03030', msg: '星屑亭の家庭菜園。「ネギとニンジン　勝手に抜くな　トメ」' },
+    { p: 'crate', x: 8, y: 13, col: '#c8a060' },
+    { p: 'barrel', x: 14, y: 13 },
+    { p: 'bench', x: 18, y: 13, msg: '空き地のベンチ。子どものころ、ルウとここで秘密基地を作った。……ルウは覚えてないって言うけど。' },
+    { p: 'tires', x: 20, y: 14 },
+    // 南の路地の小物
+    { p: 'bench', x: 7, y: 46 },
+    { p: 'bench', x: 41, y: 46 },
+    { p: 'bench', x: 62, y: 46 },
+    { p: 'flowerbed', x: 24, y: 46, w: 3 },
+    { p: 'flowerbed', x: 51, y: 46, w: 3 },
+    { p: 'vending', x: 32, y: 46, col: '#ffd25e' },
+    { p: 'trash', x: 33, y: 46 },
+    // 銭湯の煙突・赤ちょうちん
+    { p: 'w_chimney', x: 13, y: 37, text: 'PONYU', hgt: 112, msg: 'ポン湯の煙突。ミナト区のどこからでも見える目印だ。' },
+    { p: 'w_lantern', x: 9, y: 20 },
+    { p: 'w_lantern', x: 13, y: 20 }
   );
 
   // 交番・パーツ屋はチェックで（扉は飾り）
   checks.push({ x: 42, y: 13, text: '交番。「パトロール中」の札がかかっている。中にお巡りさんの湯のみが置きっぱなし。' });
 
-  G.defMap('minato', {
+  G.defMap('minato', G.W1.flatChecks({
     name: 'ミナト区',
     area: 'クレイドル7・第3陸',
     bgm: () => (G.state.chapter === 7 ? 'tension' : 'town'),
@@ -328,5 +411,138 @@
       { x: 11, y: 19, r: 30, col: '#ffb060', a: 0.7, night: true },
       { x: 58, y: 11, r: 26, col: '#bfe0ff', a: 0.5, night: true },
     ],
-  });
+  }));
+})();
+
+// ---------------- 銭湯〈ポン湯〉 ----------------
+// 番台 (11..13,11)・主人 w_ponyu_oyaji (12,10) ／ 湯船 (2,3)-(5,4), (11,3)-(14,4)
+// ポンタ（3章〜）(4,10) ／ 出入口 (8..9,13)→minato (10,43)
+(function () {
+  const r = G.rect;
+  // 銭湯の壁画（地球の山）
+  G.PROPS.w_mural = function (o) {
+    const w = o.w || 8;
+    const W = w * 16,
+      H = 30;
+    const cv = G.makeCanvas(W, H);
+    const c = cv.ctx;
+    r(c, 0, 0, W, H, '#f0f0f4');
+    for (let y = 1; y < H - 1; y++) r(c, 1, y, W - 2, 1, G.mix('#4a90e0', '#c8ecff', y / H));
+    // 雲
+    for (let i = 0; i < 5; i++) G.ellipse(c, 10 + i * (W / 5), 6 + (i % 2) * 3, 6, 2, '#ffffff');
+    // 山
+    const cx = W / 2;
+    for (let y = 8; y < H - 1; y++) {
+      const hw = (y - 8) * 2.2;
+      r(c, Math.round(cx - hw), y, Math.round(hw * 2), 1, y < 14 ? '#ffffff' : '#3a5aa0');
+    }
+    for (let y = 16; y < H - 1; y++) {
+      r(c, 2, y, Math.round((y - 16) * 2.5), 1, '#2a4a8a');
+      r(c, W - 2 - Math.round((y - 16) * 2.5), y, Math.round((y - 16) * 2.5), 1, '#2a4a8a');
+    }
+    r(c, 1, H - 5, W - 2, 4, '#3a7ac0');
+    for (let i = 3; i < W - 3; i += 5) r(c, i, H - 4, 3, 1, '#a8d8ff');
+    return { w, h: 1, img: cv, ox: 0, oy: -12, solid: false, flat: true };
+  };
+
+  G.defMap('ponyu', G.W1.flatChecks({
+    name: '銭湯〈ポン湯〉',
+    bgm: 'home',
+    light: '#e8f0f4',
+    lightAlpha: 0.7,
+    ambient: 'dust',
+    pal: { wall: '#e8eef2', wallTop: '#2a3a4a', tile: '#bfe0ea', wood: '#c8a070', baseboard: '#6a8aa0' },
+    floor: 'p',
+    rows: [
+      'wwwwwwwwwwwwwwwwww',
+      'wwwwwwwwwwwwwwwwww',
+      'wpUpUpUpppUpUpUppw',
+      'wpppppppppppppppPw',
+      'wpppppppppppppppPw',
+      'wppppppppppppppppw',
+      'wwwwwwwwppwwwwwwww',
+      'wwwwwwwwppwwwwwwww',
+      'wffffffffffffffffw',
+      'wffffffffffffffffw',
+      'wffffffffffffffffw',
+      'wffffffffffffffffw',
+      'wffffffffffffffffw',
+      'wwwwwwwwffwwwwwwww',
+    ],
+    objects: [
+      { p: 'w_mural', x: 5, y: 1, w: 8, msg: '大きなペンキ絵。「地球のフジヤマ」……ポンタのじいちゃんが、写真だけを頼りに描いたらしい。' },
+      { p: 'poster', x: 2, y: 1, col: '#c8e8f0' },
+      { p: 'poster', x: 4, y: 1, col: '#c8e8f0' },
+      { p: 'poster', x: 13, y: 1, col: '#c8e8f0' },
+      { p: 'poster', x: 15, y: 1, col: '#c8e8f0' },
+      { p: 'bath', x: 2, y: 3, msg: 'あつ湯。温度計は47度をさしている。……江戸っ子か。' },
+      { p: 'bath', x: 10, y: 3, msg: 'ぬる湯。「電気風呂」の札。ピリピリするらしい。' },
+      { p: 'w_noren', x: 8, y: 7, col: '#2a6ac0', text: 'YU' },
+      { p: 'w_noren', x: 9, y: 7, col: '#c03050', text: 'YU' },
+      // 脱衣所・ロビー
+      { p: 'locker', x: 1, y: 8, w: 4, msg: '木の下駄箱ロッカー。「27番」は、ポンタ専用らしい。' },
+      { p: 'locker', x: 12, y: 8, w: 4 },
+      { p: 'fridge', x: 16, y: 8, msg: 'ビン牛乳の冷蔵庫。フルーツ牛乳、コーヒー牛乳、そして「プロテイン牛乳」。' },
+      { p: 'counter', x: 11, y: 11, w: 3, col: '#8a5a3a', top: '#d8c0a0', items: false },
+      { p: 'bench', x: 4, y: 11, msg: '湯上がりのベンチ。座ると扇風機の風が気持ちいい。' },
+      { p: 'tv', x: 6, y: 8, msg: 'テレビでジャンク・デュエルの再放送をやっている。' },
+      { p: 'plant', x: 1, y: 12 },
+      { p: 'plant', x: 16, y: 12 },
+      { p: 'rug', x: 7, y: 9, w: 4, h: 3, col: '#5a8ab0' },
+    ],
+    checks: [{ x: 1, y: 8, w: 2, h: 1, text: 'ロッカーの上に「落とし物：ジャンクパーツ（大量）　→ポンタまで」の貼り紙。' }],
+    npcs: [],
+    lights: [
+      { x: 4, y: 3, r: 40, col: '#c0e8ff', a: 0.5 },
+      { x: 12, y: 3, r: 40, col: '#c0e8ff', a: 0.5 },
+      { x: 9, y: 10, r: 46, col: '#ffe8c0', a: 0.4 },
+    ],
+    warps: [{ x: 8, y: 13, w: 2, h: 1, to: 'minato', tx: 10, ty: 43, dir: 'down', se: 'door' }],
+  }));
+
+  // ---------------- コンビニ〈スターマート〉 ----------------
+  // レジ (8..11,5)・店員 w_clerk (10,4) ／ 出入口 (6..7,10)→minato (42,21)
+  G.defMap('konbini', G.W1.flatChecks({
+    name: 'スターマート ミナト商店街店',
+    bgm: 'shop',
+    light: '#eef4ff',
+    lightAlpha: 0.6,
+    pal: { wall: '#f4f6fa', wallTop: '#2a3a3a', checkA: '#f4f4f8', checkB: '#d4dae6', baseboard: '#2ab07a' },
+    floor: 'k',
+    rows: [
+      'wwwwwwwwwwwwww',
+      'wwwwwwwwwwwwww',
+      'wkkkkkkkkkkkkw',
+      'wkkkkkkkkkkkkw',
+      'wkkkkkkkkkkkkw',
+      'wkkkkkkkkkkkkw',
+      'wkkkkkkkkkkkkw',
+      'wkkkkkkkkkkkkw',
+      'wkkkkkkkkkkkkw',
+      'wkkkkkkkkkkkkw',
+      'wwwwwwkkwwwwww',
+    ],
+    objects: [
+      { p: 'fridge', x: 1, y: 2, msg: 'ドリンクの冷蔵ケース。「新発売！ コロニーソーダ・ネオンピーチ味」' },
+      { p: 'fridge', x: 2, y: 2 },
+      { p: 'fridge', x: 3, y: 2 },
+      { p: 'fridge', x: 4, y: 2 },
+      { p: 'fridge', x: 5, y: 2 },
+      { p: 'shelf', x: 8, y: 2, w: 3, col: '#5a6a7a', msg: 'レジ裏の棚。ホットスナックと、AFプラモの「くじ」が並んでいる。' },
+      { p: 'terminal', x: 12, y: 2, col: '#4ef0ff', msg: 'ATM兼マルチ端末。「コロニー公社の各種お支払い・チケット発券」……文化祭の前売り券もここで買えるらしい。' },
+      { p: 'counter', x: 8, y: 5, w: 4, col: '#2ab07a', top: '#f0f4f8' },
+      { p: 'shelf', x: 1, y: 5, w: 5, msg: 'お菓子の棚。ネオンキャンディがずらりと並んで光っている。' },
+      { p: 'shelf', x: 1, y: 8, w: 5, msg: 'おにぎり・パンの棚。メロンパンは残りひとつ。' },
+      { p: 'shelf', x: 9, y: 8, w: 3, kind: 'parts', msg: '日用品の棚。電池、ガムテープ、「機体用ワックス」。' },
+      { p: 'poster', x: 6, y: 1, col: '#ff5fa2', msg: '「ジャンク・デュエル公式グッズ　好評発売中」' },
+      { p: 'poster', x: 7, y: 1, col: '#ffd25e', msg: '「マザーからのお知らせ：リサイクルにご協力ください」' },
+      { p: 'wallwindow', x: 2, y: 9, w: 0 },
+    ].filter((o) => o.w !== 0),
+    npcs: [],
+    lights: [
+      { x: 3, y: 3, r: 40, col: '#c0f0ff', a: 0.5 },
+      { x: 10, y: 4, r: 40, col: '#ffffff', a: 0.5 },
+    ],
+    warps: [{ x: 6, y: 10, w: 2, h: 1, to: 'minato', tx: 42, ty: 21, dir: 'down', se: 'door' }],
+  }));
 })();

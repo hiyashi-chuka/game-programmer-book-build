@@ -154,6 +154,8 @@
     G.state = G.newState();
     G.ui.closeAll();
     G.ev.reset();
+    G.field.fade = 1;
+    G.field.load(G.state.map, G.state.x, G.state.y, G.state.dir, { silent: true });
     G.setScene(G.fieldScene);
     if (G.STORY && G.STORY.start) await G.STORY.start();
   };
@@ -261,8 +263,10 @@
     if (q.get('chapter')) {
       G.audio.init();
       G.state = G.newState();
-      G.setScene(G.fieldScene);
       if (G.STORY.debugSetup) G.STORY.debugSetup(+q.get('chapter'));
+      G.field.fade = 1;
+      G.field.load('tome_room', 5, 6, 'down', { silent: true });
+      G.setScene(G.fieldScene);
       G.ev.run(() => G.ev.startChapter(+q.get('chapter')));
       return;
     }
