@@ -211,12 +211,12 @@ SIMPLE = False                 # 単純化＋ドットの手直し（v8、docs/1
 # 絵柄のプリセット（比較用）。v7 は『メイドインアビス』の比率の研究（docs/13）を反映した版
 PRESETS = {
     "v6": dict(HEAD_SCALE=1.06, BODY_SCALE=0.94, ANIME_SMOOTH=3.0, ROUND_FACE=0.0, FACE_STYLE="modern",
-               SIDE_LOCK_OUT=0.0, BANG_UP=0.0, EYE_X=7.3, SIMPLE=False),
+               SIDE_LOCK_OUT=0.0, BANG_UP=0.0, EYE_X=7.3, BROW_Y=18.8, BROW_FAR_DY=0.0, SIMPLE=False),
     "v7": dict(HEAD_SCALE=1.08, BODY_SCALE=0.88, ANIME_SMOOTH=4.0, ROUND_FACE=1.0, FACE_STYLE="round",
                SIDE_LOCK_OUT=1.8, BANG_UP=2.2, EYE_X=7.3, SIMPLE=False),
     # v8：v7 はやりすぎ（目が離れすぎ・目が単純すぎ・体が小さすぎ）だったため、v6 を土台に少しだけ丸く
     "v8": dict(HEAD_SCALE=1.06, BODY_SCALE=0.94, ANIME_SMOOTH=3.0, ROUND_FACE=0.4, FACE_STYLE="modern",
-               SIDE_LOCK_OUT=0.8, BANG_UP=1.0, EYE_X=7.6, SIMPLE=True),
+               SIDE_LOCK_OUT=0.8, BANG_UP=1.0, EYE_X=7.6, BROW_Y=16.9, BROW_FAR_DY=-1.0, SIMPLE=True),
 }
 
 
@@ -1026,6 +1026,12 @@ FACE_STYLE = "modern"   # "classic" で v4 までの目（比較用）
 # 顔パーツの高さ（頭の座標、頭頂 30.8・顎 0.6）。目を少し下げ、口を目に近づける（docs/12 12-2）
 EYE_Y, NOSE_Y, MOUTH_Y = 12.2, 7.6, 5.9
 EYE_X = 7.3
+# 眉（docs/14 14-7）：前髪の毛先と重ならない高さ（目の上 2px ほど）に、髪の輪郭線より明るく肌よりはっきり濃い色で
+BROW_X, BROW_Y = 7.0, 18.8
+BROW_FAR_DY = 0.0                  # 奥の眉の高さの調整（前髪の毛先との重なりを避ける）
+BROW_FAR = ["...EEE", ".EE..."]    # 奥（画面左）の眉：右端＝眉頭
+BROW_NEAR = ["EEE...", "...EE."]   # 手前（画面右）の眉：左端＝眉頭
+BROW_PAL = dict(FACE_PAL, E=hx("#96604f"))   # 前髪の輪郭線（#6e4a42）より明るく、肌の上ではっきり見える茶色
 
 MODERN_PAL = {
     "c": hx("#d9a29a"),  # 二重のライン（細く、肌より少し濃い色）
@@ -1104,8 +1110,8 @@ def draw_face_modern(put, eyes, hi_, bi):
     put((-EYE_X, EYE_Y, 11.6), far, MODERN_PAL, allow=(bi,))
     put((EYE_X, EYE_Y, 11.6), mirror_eye(rows, iris), MODERN_PAL, allow=(bi,))
     # 眉：細く、ゆるいアーチ。眉頭（内側）を少し上げた「ほんのり困り眉」は守ってあげたくなる可愛さ
-    put((-7.0, 18.8, 12.4), ["...EEE", ".EE..."], FACE_PAL, allow=(hi_, bi))
-    put((7.0, 18.8, 12.4), ["EEE...", "...EE."], FACE_PAL, allow=(hi_, bi))
+    put((-BROW_X, BROW_Y + BROW_FAR_DY, 12.4), BROW_FAR, BROW_PAL, allow=(hi_, bi))
+    put((BROW_X, BROW_Y, 12.4), BROW_NEAR, BROW_PAL, allow=(hi_, bi))
     put((0.4, NOSE_Y, 12.6), ["N"], FACE_PAL)                   # 鼻は1px の影だけ
     # 口：小さな ∪ の笑顔（口角を上げる）。目に近づけて「目と口の三角形」を低く広く（狸顔・童顔）
     put((0.2, MOUTH_Y, 11.9), ["M..M", ".MM."], {"M": hx("#b45a66")})
