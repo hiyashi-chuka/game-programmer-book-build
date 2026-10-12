@@ -106,8 +106,8 @@
     return {
       maxhp: Math.floor(base.hp * (1 + (m.armor - 1) * 0.35) + G.state.lv * 4),
       maxen: Math.floor(base.en * (1 + (m.boost - 1) * 0.2)),
-      atk: Math.floor(base.atk * (1 + (m.power - 1) * 0.3) + G.state.lv * 1.5),
-      beam: Math.floor(base.beam * (1 + (m.weapon - 1) * 0.3) + G.state.lv),
+      atk: Math.floor(base.atk * (1 + (m.power - 1) * 0.25) + G.state.lv * 1.2),
+      beam: Math.floor(base.beam * (1 + (m.weapon - 1) * 0.25) + G.state.lv * 0.6),
       spd: base.spd + (m.boost - 1) * 0.12,
       def: Math.floor(base.def + (m.armor - 1) * 2 + G.state.lv * 0.5),
     };

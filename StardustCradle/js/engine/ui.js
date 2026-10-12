@@ -642,7 +642,7 @@
       update() {},
       draw(c, w, x, y, ww) {
         const m = G.state.mech;
-        const md = G.MECHS[m.id.replace(/2$/, '')] || G.MECHS.ponkotsu;
+        const md = G.MECHS[m.id] || G.MECHS.ponkotsu;
         const ms = G.mechStats();
         const sheet = G.mechSheet(md);
         c.imageSmoothingEnabled = false;

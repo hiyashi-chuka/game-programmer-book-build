@@ -500,7 +500,7 @@
       if (on) {
         const id = mechId || G.state.mech.id;
         this.mechId = id;
-        this.sheet = G.mechSheet(G.MECHS[id.replace(/2$/, '')] || G.MECHS.ponkotsu);
+        this.sheet = G.mechSheet(G.MECHS[id] || G.MECHS.ponkotsu);
         this.w = 16;
         this.fh = 10;
         this.bodyH = 34;
@@ -688,7 +688,7 @@
         return;
       }
       this.en -= 3;
-      this.shotCd = 10;
+      this.shotCd = 12;
       const t = this.nearestEnemy(230);
       let ang;
       if (t) {

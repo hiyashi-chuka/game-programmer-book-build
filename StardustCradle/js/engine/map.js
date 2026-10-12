@@ -188,7 +188,7 @@
     renderGround() {
       const cv = G.makeCanvas(this.w * 16, this.h * 16);
       const c = cv.ctx;
-      if (this.def.bg) {
+      if (this.def.bg && !this.def.space) {
         c.fillStyle = this.def.bg;
         c.fillRect(0, 0, cv.width, cv.height);
       }

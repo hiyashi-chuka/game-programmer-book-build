@@ -497,6 +497,35 @@
     c.fillRect(0, 0, W, H);
   };
 
+  // ---------- 宇宙マップ用のパララックス背景 ----------
+  G.PARALLAX = {
+    space(c, cam, t) {
+      const bg = starfield(3);
+      // 遠景：ゆっくり動く
+      const ox = -((cam.x * 0.05) % W),
+        oy = -((cam.y * 0.05) % H);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) c.drawImage(bg, Math.floor(ox + i * W), Math.floor(oy + j * H));
+      // 地球（遠く）
+      const ex = 380 - cam.x * 0.08,
+        ey = 210 - cam.y * 0.08;
+      G.ellipse(c, Math.round(ex), Math.round(ey), 70, 70, '#1a3a80');
+      G.ellipse(c, Math.round(ex - 8), Math.round(ey - 8), 62, 62, '#2a5ab0');
+      G.ellipse(c, Math.round(ex - 26), Math.round(ey - 20), 16, 9, '#4a9a5a');
+      G.ellipse(c, Math.round(ex + 12), Math.round(ey + 14), 20, 8, '#4a9a5a');
+      c.fillStyle = 'rgba(255,255,255,0.35)';
+      c.fillRect(Math.round(ex - 40), Math.round(ey - 4), 30, 2);
+      // コロニー（中景）
+      colonyExterior(c, t, 120 - cam.x * 0.15, 70 - cam.y * 0.15, 0.55, !!G.state.flags.c7_dark);
+      // 近景の星（速く流れる）
+      for (let i = 0; i < 50; i++) {
+        const x = (((G.hash(i, 1, 33) * W * 2 - cam.x * 0.5) % W) + W) % W,
+          y = (((G.hash(i, 2, 33) * H * 2 - cam.y * 0.5) % H) + H) % H;
+        c.fillStyle = i % 4 ? 'rgba(200,210,255,0.7)' : '#ffffff';
+        c.fillRect(Math.round(x), Math.round(y), i % 7 ? 1 : 2, 1);
+      }
+    },
+  };
+
   G.drawCG = function (c, cg) {
     cg.t++;
     const f = CG[cg.id] || CG.black;

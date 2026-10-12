@@ -331,7 +331,7 @@ const won = await E.battle({
 - **効果音**: cursor ok cancel buzz swing hit hurt kill dash pickup coin door step mechstep beam shot saber boost explode bigexplode levelup heal alarm quake echo save lockon charge shield item get boot
 - **CG**: colony colony_dusk colony_night colony_dark rooftop rooftop_night title space colony_out colony_out_dark neon arena zephyr starseed memory dawn radio black white
 - **アイテム**: 消費 soda melonpan onigiri ramen energy repair repair2 candy ／素材 scrap chip memory ／武器 wrench pipe stunrod plasmabat echoblade ／装飾 charm sneakers headset badge pendant ／大事なもの parts_list gyro idcard entry keycard letter pass_core ticket ramen_box photo tape （新規は `G.addItem('id', {name, desc})`）
-- **機体（MECHS）**: ponkotsu harukaze rose zephyr guardner guardner2 salamander nocturne junker clanA clanB jackal
+- **機体（MECHS）**: ponkotsu harukaze harukaze2 rose zephyr guardner guardner2 salamander nocturne junker clanA clanB jackal
 
 ---
 
@@ -408,3 +408,11 @@ onSpotted: async (e) => {            // マップ定義に書く（または敵�
 },
 ```
 巡回中の見張りは既定で無敵・接触ダメージなし（`invuln:false, contact:true` で通常の敵にもできる）。
+
+### 宇宙マップ
+`space: true` のマップでは `*` タイルが透明・通行可能になり、背景に**パララックス（星空・地球・コロニー外観）**が自動で描かれる。
+足場（宇宙港・外壁）には `h`（船体外板）や `m` `g` `x` を使う。宇宙での戦闘は `mech:true` 推奨。
+`E.set('c7_dark')` 中は背景のコロニーの窓が暗くなる（ミラーが閉じた状態）。
+
+### ボス戦のカメラ
+戦闘中にボス（boss:true）がいると、カメラは自動でボス側に寄る。ボスは開始位置からプレイヤーまで画面1枚以内（タイル距離10〜14程度）に置くとよい。

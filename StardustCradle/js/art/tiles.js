@@ -369,6 +369,7 @@
   T['*'] = {
     name: 'space',
     draw(c, x, y, tx, ty, m, v) {
+      if (m.def && m.def.space) return; // 宇宙マップでは透明（パララックス背景が見える）
       r(c, x, y, S, S, '#06051a');
       for (let i = 0; i < 3; i++) {
         const h = G.hash(tx, ty, 90 + i);

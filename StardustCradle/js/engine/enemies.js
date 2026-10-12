@@ -135,7 +135,8 @@
       const lv = o.lv || 1;
       const k = 1 + (lv - 1) * 0.18;
       this.name = o.name || d.name;
-      this.maxhp = this.hp = Math.floor((o.hp || d.hp) * (o.hp ? 1 : k));
+      const bossy = o.boss !== undefined ? o.boss : !!d.boss;
+      this.maxhp = this.hp = Math.floor((o.hp || d.hp) * (o.hp ? 1 : bossy ? 1 + (lv - 1) * 0.35 : k));
       this.atk = Math.floor(d.atk * k);
       this.def = Math.floor(d.def * (1 + (lv - 1) * 0.12));
       this.exp = Math.floor(d.exp * k);

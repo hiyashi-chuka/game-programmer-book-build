@@ -135,6 +135,13 @@
     if (F.cam.fx !== undefined && F.cam.fx !== null) {
       x = F.cam.fx - G.W / 2;
       y = F.cam.fy - G.H / 2;
+    } else if (F.battle && F.battle.active) {
+      // ボス戦ではカメラをボス側に寄せる
+      const boss = F.ents.find((e) => e.isEnemy && e.boss && !e.dead);
+      if (boss) {
+        x += G.clamp((boss.x - p.x) * 0.35, -120, 120);
+        y += G.clamp((boss.y - 30 - p.y) * 0.35, -70, 70);
+      }
     }
     const mw = F.map.w * 16,
       mh = F.map.h * 16;
@@ -328,6 +335,7 @@
     c.fillStyle = def.bg || '#0a0818';
     c.fillRect(0, 0, G.W, G.H);
     if (def.parallax) def.parallax(c, F.cam, G.frame);
+    else if (def.space) G.PARALLAX.space(c, F.cam, G.frame);
     c.drawImage(F.map.ground, ox, oy);
     // 水面のきらめき
     if (F.map.waterCells.length) {
@@ -676,7 +684,7 @@
   };
   F.checkBattle = function () {
     const b = F.battle;
-    if (b.won || b.lost) return;
+    if (b.won || b.lost || !b.active) return;
     b.t++;
     const def = b.def;
     const es = F.enemies();

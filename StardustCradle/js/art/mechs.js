@@ -294,6 +294,7 @@
   G.MECHS = {
     ponkotsu: { name: 'ポンコツ号', body: '#e8b030', accent: '#3a3a48', accent2: '#ff5050', frame: '#5a5a6a', eye: '#7ad8f0', head: 'visor', build: 'worker', stripes: true },
     harukaze: { name: 'ハルカゼ', body: '#f0f0f6', accent: '#3a6ad0', accent2: '#ff4050', frame: '#4a4a5a', eye: '#4ef0ff', head: 'v', vcol: '#ff9a30', build: 'slim', shoulderAccent: true },
+    harukaze2: { name: 'ハルカゼ改', body: '#f8f8ff', accent: '#2a4ad0', accent2: '#ff3050', frame: '#3a3a50', eye: '#4ef0ff', head: 'crest', vcol: '#ffd25e', build: 'slim', shoulderAccent: true, wings: '#ff9ac8' },
     rose: { name: 'ローズハウンド', body: '#ff7fb0', accent: '#2a2238', accent2: '#4ef0ff', frame: '#3a3048', eye: '#4ef0ff', head: 'cat', build: 'slim', shoulderAccent: true },
     zephyr: { name: 'ゼフィール', body: '#f4f6ff', accent: '#2a4ac0', accent2: '#ff2848', frame: '#5a6080', eye: '#7dff9a', head: 'crest', vcol: '#ffd25e', build: 'slim', wings: '#8ff8ff' },
     guardner: { name: 'ガードナー', body: '#7a8aa8', accent: '#4a5a7a', accent2: '#ffd25e', frame: '#3a4058', eye: '#ff3a8a', head: 'mono', build: 'heavy', shoulderAccent: true },
