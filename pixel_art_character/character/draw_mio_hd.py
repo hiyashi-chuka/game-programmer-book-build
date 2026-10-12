@@ -26,6 +26,7 @@ MAT["hair"].update({k: hx(v) for k, v in HAIR_HD.items()})
 
 RES = 4                       # 解像度の倍率（v8 の 96×176 → 384×704）
 W, H = 96 * RES, 176 * RES
+OX, OY = 0, 0                 # 描く範囲の左上（一部分だけ描くとき）
 OUT = B.OUT
 
 
@@ -45,8 +46,8 @@ def shift(a, dx, dy, fill):
 def raymarch(groups, yaw=B.BODY_YAW, pitch=B.PITCH):
     Rv = B.view_matrix(yaw, pitch)
     jj, ii = np.mgrid[0:H, 0:W]
-    sx = (ii.ravel() + 0.5) / RES - 48.0
-    sy = B.GROUND_ROW - (jj.ravel() + 0.5) / RES
+    sx = (ii.ravel() + OX + 0.5) / RES - 48.0
+    sy = B.GROUND_ROW - (jj.ravel() + OY + 0.5) / RES
     O = np.stack([sx, sy, np.full_like(sx, 120.0)], axis=1) @ Rv
     D = np.array([0, 0, -1.0]) @ Rv
     t = np.zeros(len(O))
@@ -67,7 +68,7 @@ def raymarch(groups, yaw=B.BODY_YAW, pitch=B.PITCH):
 def project(p, Rv):
     """モデル座標 → 画面のピクセル座標（RES 倍）。"""
     v = Rv @ p
-    return (v[0] + 48.0) * RES, (B.GROUND_ROW - v[1]) * RES, v[2]
+    return (v[0] + 48.0) * RES - OX, (B.GROUND_ROW - v[1]) * RES - OY, v[2]
 
 
 def chain_ids(group):
@@ -135,9 +136,157 @@ def sharpen_tips(group, extend=1.2, tip=0.04):
 
 
 # ===========================================================================
+# 1.5 HD 用の顔の形と髪型（docs/15 15-11）
+# ===========================================================================
+def face_prims_hd(P):
+    """可愛い輪郭：頬は目の下でぷにっとふくらみ、顎は小さく丸く、口から顎までを短く（大人っぽい V の顎を避ける）。"""
+    Rh = B.head_frame(P)
+    o = P["head"]
+    L = lambda x, y, z: o + Rh @ v3(x, y, z)
+    E = lambda c, r, tag: B.Ellipsoid(L(*c), r, Rh, tag)
+    out = [
+        E((0, 17.5, -1.0), (13.9, 13.3, 13.3), "cranium"),
+        E((0, 10.2, 2.6), (12.6, 7.3, 9.8), "cheek"),
+        E((0, 3.9 + CHIN_UP, 5.5), (4.7, 2.7, 3.0), "chin"),
+    ]
+    for s in (-1, 1):
+        out.append(E((s * 6.9, 7.6, 6.0), (4.8 * CHEEK_PUFF, 3.9 * CHEEK_PUFF, 4.4), "cheek_puff"))   # 頬のふくらみ
+        out.append(B.RoundCone(L(s * 9.6, 8.4, 2.8), L(s * 2.6, 3.9 + CHIN_UP, 5.4), 3.4, 3.0, "jaw"))
+    return out
+
+
+CHIN_UP = 0.9        # 顎先を上げる量（口から顎までを短く＝幼く）
+CHEEK_PUFF = 1.0     # 頬のふくらみの大きさ
+
+
+class Ribbon(B.RoundCone):
+    """平たいリボン状の毛束の一区間（断面が楕円：幅 rw、厚み rt）。
+    厚みの向き＝頭の中心から外向き。円柱の毛束は糸っぽく見えるので、プロの描き方どおり平たい束にする。"""
+
+    def __init__(self, a, b, rw1, rw2, rt1, rt2, center, tag=""):
+        super().__init__(a, b, rw1, rw2, tag)
+        self.rt1, self.rt2 = float(rt1), float(rt2)
+        self.center = np.asarray(center, float)
+
+    def d(self, P):
+        ba = self.b - self.a
+        L2 = ba @ ba
+        u = ba / np.sqrt(L2)
+        h = np.clip(((P - self.a) @ ba) / L2, 0, 1)
+        A = self.a + np.outer(h, ba)
+        q = P - A
+        n = A - self.center
+        n = n - np.outer(n @ u, u)
+        n = n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-6)
+        bvec = np.cross(u, n)
+        rw = self.r1 + (self.r2 - self.r1) * h
+        rt = self.rt1 + (self.rt2 - self.rt1) * h
+        qa, qn, qb = q @ u, np.einsum("ij,ij->i", q, n), np.einsum("ij,ij->i", q, bvec)
+        k = np.sqrt((qb / rw) ** 2 + (qn / rt) ** 2 + (qa / rt) ** 2)
+        return (k - 1.0) * np.minimum(rw, rt)
+
+
+def build_hair_hd(P, old_hair, old_bangs):
+    """HD 用の髪型（ミルクティー色のボブ）。
+    - 毛束は平たいリボン。太い束と細い束を混ぜ、数を絞る
+    - ボブの毛先は内巻きが中心（内巻き 8：外ハネ 2）、頬の高さでふんわり膨らむ
+    - 横髪は頬に沿って下り、毛先が顎の方へ内巻き（顔を包んで小さく見せる）
+    - 前髪は 7 束、大・中・小。毛先は尖り、束の間から額が見える
+    - 遊び毛を 2 本、アホ毛 1 本"""
+    Rh = B.head_frame(P)
+    o = P["head"]
+    HL = lambda p: o + Rh @ v3(*p)
+    HC = np.array([0, 17.5, -1.4])
+    center = HL(HC)
+
+    def ribbon(pts, rws, rts, tag, n=4):
+        P2 = [HL(p) for p in pts]
+        curve = []
+        m = len(P2)
+        for i in range(m - 1):
+            p0, p1, p2, p3 = P2[max(i - 1, 0)], P2[i], P2[i + 1], P2[min(i + 2, m - 1)]
+            for j in range(n):
+                t = j / n
+                curve.append(0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+                                    + (-p0 + 3 * p1 - 3 * p2 + p3) * t ** 3))
+        curve.append(P2[-1])
+        tt = np.linspace(0, 1, len(curve))
+        src = np.linspace(0, 1, len(rws))
+        rw, rt = np.interp(tt, src, rws), np.interp(tt, src, rts)
+        return [Ribbon(curve[i], curve[i + 1], rw[i], rw[i + 1], rt[i], rt[i + 1], center, tag)
+                for i in range(len(curve) - 1)]
+
+    def on_skull(d, r):
+        d = np.asarray(d, float)
+        return tuple(HC + d / np.linalg.norm(d) * r)
+
+    # 土台：頭のふくらみ（v8 より少し大きく、ふんわり）＋ボブのかたまり
+    hair = [B.Ellipsoid(HL((0, 18.4, -1.4)), (14.9, 14.3, 14.8), Rh, "crown"),
+            B.Ellipsoid(HL((0, 10.8, -3.2)), (16.4, 13.8, 14.4), Rh, "bob")]
+    whorl = np.array([-0.18, 0.78, -0.6])
+    n_back = 11
+    widths = [3.9, 2.6, 3.5, 2.3, 4.0, 2.8, 3.8, 2.4, 3.6, 2.7, 3.9]
+    flip = {1, 9}                                   # 外ハネにする束（残りは内巻き）
+    for k, az in enumerate(np.linspace(-120, 120, n_back)):   # 一番前の束が横髪の上を覆わないように
+        a_ = math.radians(az)
+        hor = np.array([math.sin(a_), 0.0, -math.cos(a_)])
+        eq = hor + np.array([0, 0.18, 0])
+        w = widths[k]
+        jit = ((k * 37) % 7) / 7.0 - 0.5
+        p0 = on_skull(whorl * 0.8 + eq * 0.2, 14.4)
+        p1 = on_skull(whorl * 0.45 + eq * 0.55, 14.4)   # 頭頂では土台になじませる（帯のような段差を作らない）
+        p2 = on_skull(eq, 15.6)
+        p3 = tuple(np.array([0, 6.0, -2.6]) + hor * 15.8)        # 頬の高さでふんわり膨らむ
+        p4 = tuple(np.array([0, 1.2 + 0.6 * jit, -2.6]) + hor * 15.9)
+        if k in flip:
+            p5 = tuple(np.array([0, -1.0 + 0.4 * jit, -2.4]) + hor * 19.4)   # 外ハネ
+        else:
+            p5 = tuple(np.array([0, -1.6 + 0.5 * jit, -2.2]) + hor * 14.0)   # 内巻き：毛先が首の方へ入る
+        hair += ribbon([p0, p1, p2, p3, p4, p5], [w * 0.75, w * 0.95, w, w * 1.05, w * 0.85, 0.12],
+                       [1.5, 1.6, 1.7, 1.7, 1.4, 0.3], "strand")
+    # 遊び毛（輪郭の外へ少しだけ。描きすぎるとくせ毛に見える）
+    for pts in (((9.0, 27.6, 7.0), (12.6, 28.4, 6.0), (15.4, 27.0, 4.6)),
+                ((-12.0, 25.0, 4.0), (-15.2, 24.4, 2.6), (-16.6, 22.4, 1.4))):
+        hair += ribbon(list(pts), [0.42, 0.32, 0.05], [0.3, 0.25, 0.05], "stray", n=3)
+    # アホ毛
+    ah = [(0.6, 30.4, 1.8), (2.4, 34.4, 1.2), (5.2, 36.6, 0.4), (7.8, 35.6, -0.2)]
+    hair += ribbon(ah, [0.95, 0.75, 0.5, 0.05], [0.6, 0.5, 0.4, 0.05], "ahoge", n=3)
+
+    front = []
+    sx = B.SIDE_LOCK_OUT
+    for s_ in (-1, 1):
+        # 横髪：こめかみから頬に沿って細く下り、毛先は少しだけ顎の方へ。先は筆先のように尖らせる
+        # （太く丸い横髪は頬の横の塊＝耳あてのように見えた）
+        front += ribbon([(s_ * (11.4 + sx), 23.0, 8.2), (s_ * (12.7 + sx), 15.0, 9.2), (s_ * (12.7 + sx), 8.0, 9.0),
+                         (s_ * (12.2 + sx), 2.4, 8.2), (s_ * (11.2 + sx), -1.6, 7.4)],
+                        [1.9, 2.1, 1.9, 1.1, 0.06], [0.9, 1.0, 1.0, 0.8, 0.2], "side_lock")
+        front += ribbon([(s_ * (13.4 + sx), 21.5, 4.8), (s_ * (14.8 + sx), 12.0, 5.8), (s_ * (15.0 + sx), 4.5, 5.6),
+                         (s_ * (14.4 + sx), -0.6, 5.0)], [1.7, 1.9, 1.3, 0.06], [0.9, 1.0, 0.9, 0.2], "side_lock")
+    # 前髪：分け目（画面左寄り）から放射状。大・中・小の 7 束、毛先は少し内側へ
+    part_x = -2.4
+    bangs_spec = [(-11.2, -12.0, 19.4, 1.6), (-7.6, -8.2, 17.0, 2.9), (-3.8, -3.6, 18.7, 1.4),
+                  (0.2, 0.4, 16.3, 3.1), (4.4, 5.2, 17.8, 2.3), (8.4, 9.2, 18.9, 1.9), (11.4, 12.3, 20.1, 1.3)]
+    for rx, tx, ty, w in bangs_spec:
+        ty += B.BANG_UP
+        root_x = part_x + (rx - part_x) * 0.55
+        inward = -0.6 if tx > 0 else 0.6
+        # 束は毛先へ向かって徐々に細くなり、筆先のように尖る（束の間から額が見える）
+        front += ribbon([(root_x, 28.6, 4.2), (rx, 25.6, 11.0), (tx * 0.98, (25.0 + ty) / 2, 13.0),
+                         (tx + inward * 0.6, ty + 2.0, 13.4), (tx + inward, ty, 13.5)],
+                        [w * 0.85, w * 0.95, w * 0.7, w * 0.4, 0.06], [0.8, 0.8, 0.7, 0.5, 0.2], "bang")
+
+    g_hair = B.Group("hair", old_hair.mat, hair, k=2.0, cut=old_hair.cut, warp=old_hair.warp)
+    g_bangs = B.Group("bangs", old_bangs.mat, front, k=0.8, warp=old_bangs.warp)
+    for g in (g_hair, g_bangs):
+        g.set_xf(P["head"], B.HEAD_SCALE, P["head"] * B.BODY_SCALE)
+    return g_hair, g_bangs
+
+
+# ===========================================================================
 # 2. セルルックの描画
 # ===========================================================================
-_make_pose_v8 = B.make_pose
+_make_pose_v8 = getattr(B, "_make_pose_v8", B.make_pose)   # 再読み込みしても v8 の元の関数を使う
+B._make_pose_v8 = _make_pose_v8
 
 
 def make_pose(bob=0.0):
@@ -171,8 +320,17 @@ def render_base(bob=0.0):
             ng = B.Group("tee", g.mat, g.prims + extra, k=g.k, cut=g.cut)
             ng.set_xf(np.zeros(3), B.BODY_SCALE, np.zeros(3))
             groups[i] = ng
-        if g.name in ("hair", "bangs") and HAIR_SHARP:
-            sharpen_tips(g)
+        if g.name == "face" and FACE_HD:
+            ng = B.Group("face", g.mat, face_prims_hd(P), k=g.k)
+            ng.set_xf(P["head"], B.HEAD_SCALE, P["head"] * B.BODY_SCALE)
+            groups[i] = ng
+    if HAIR_HD_SHAPE:
+        ih, ib = [k for k, g in enumerate(groups) if g.name == "hair"][0], [k for k, g in enumerate(groups) if g.name == "bangs"][0]
+        groups[ih], groups[ib] = build_hair_hd(P, groups[ih], groups[ib])
+    elif HAIR_SHARP:
+        for g in groups:
+            if g.name in ("hair", "bangs"):
+                sharpen_tips(g)
     Pw, hit, Rv = raymarch(groups)
     names = [g.name for g in groups]
     gi = {n: k for k, n in enumerate(names)}
@@ -321,7 +479,7 @@ def render_base(bob=0.0):
     su_full = np.full(W * H, -1.0)
     su_full[idx] = su
     img = outlines(img, gmap, vz, lvmap, strand.reshape(H, W), mats, groups, su_full.reshape(H, W))
-    return dict(img=img, gmap=gmap, vz=vz, names=names, P=P, Rv=Rv, groups=groups, bob=bob)
+    return dict(img=img, gmap=gmap, vz=vz, names=names, P=P, Rv=Rv, groups=groups, bob=bob, strand=strand.reshape(H, W))
 
 
 def finish(base, eyes="open", face_details=True):
@@ -351,10 +509,12 @@ def grade(img, gmap):
 FACE_SHADOW_Y = 16.0        # 顔に落ち影を入れるのはこの高さ（頭の座標）より上＝額だけ
 LEG_SLIM = -0.45            # 脚を細くする量（距離関数を内側へずらす）
 HAIR_SPHERE = 0.6           # 髪の法線を球の法線へ寄せる割合
+FACE_HD = True              # HD 用の可愛い輪郭（頬のふくらみ・小さく丸い顎）
+HAIR_HD_SHAPE = True        # HD 用の髪型（平たい毛束・内巻きのボブ）
 HAIR_SHARP = True           # 毛先を尖らせる
 HAIR_TEXTURE = True         # 毛束に沿った質感（毛流れの線・束の影・毛先の明るさ）
 SKIN_TERM = hx("#ffbcaa")   # 肌の影の境目（明るい側）に置く彩度の高い色
-HAIR_JUMP = 6.0
+HAIR_JUMP = 9.0   # 髪の中の輪郭線は大きく重なる所だけ（内側の線は少なく：docs/15）
 
 
 def hair_texture(img, idx, is_hair, lv, lit, su, sv, slat, st, ql, inner, is_bang=None, ring=None):
@@ -423,6 +583,11 @@ def outlines(img, gmap, vz, lvmap, strand, mats, groups, su_map=None):
         jt = np.where(np.isin(gmap, hair_ids), HAIR_JUMP, 3.0)
         jump = here & (ng == gmap) & (vz - nz > jt)
         groove = here & (strand >= 0) & (ns >= 0) & (ns != strand) & (vz < nz + 0.5) & ~jump
+        # 毛束が別の束の手前に重なる所：細く明るめの線（内側の線は外周より弱く。束の形がつながって見える）
+        overlap = here & (strand >= 0) & (ns >= 0) & (ns != strand) & (vz - nz > 1.2) & ~jump & (ng == gmap)
+        for y, x in zip(*np.where(overlap)):
+            m = mats[gmap[y, x]]
+            out[y, x] = mix(m["line"], m["s2"], 0.6)
         for y, x in zip(*np.where(groove)):
             m = mats[gmap[y, x]]
             # 束の分かれ目は「線」ではなく浅い溝：今の色と影色の中間（強すぎると髪が細い糸の束に見える）
@@ -518,8 +683,8 @@ def face_uv(face_group, P, Rv, box):
     """顔の面だけをレイマーチして、各ピクセルの頭の座標 (x, y, z) を返す（前髪の下でも求まる）。"""
     x0, y0, x1, y1 = box
     jj, ii = np.mgrid[y0:y1, x0:x1]
-    sx = (ii.ravel() + 0.5) / RES - 48.0
-    sy = B.GROUND_ROW - (jj.ravel() + 0.5) / RES
+    sx = (ii.ravel() + OX + 0.5) / RES - 48.0
+    sy = B.GROUND_ROW - (jj.ravel() + OY + 0.5) / RES
     O = np.stack([sx, sy, np.full_like(sx, 120.0)], axis=1) @ Rv
     D = np.array([0, 0, -1.0]) @ Rv
     t = np.zeros(len(O))
@@ -544,7 +709,7 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes, groups):
     Rh = B.head_frame(P)
     cx, cy, _ = project(B.head_dst(P["head"] + Rh @ v3(0, 13, 8), P), Rv)
     r = int(20 * RES)
-    box = (int(cx) - r, int(cy) - r, int(cx) + r, int(cy) + r)
+    box = (max(int(cx) - r, 0), max(int(cy) - r, 0), min(int(cx) + r, W), min(int(cy) + r, H))
     loc, hit = face_uv(groups[fi], P, Rv, box)
     x0, y0 = box[0], box[1]
     sub = img[y0:box[3], x0:box[2]]
@@ -759,8 +924,14 @@ def composite(sprite, scale, P=None, Rv=None):
 
 
 def set_res(r):
-    global RES, W, H
-    RES, W, H = r, 96 * r, 176 * r
+    global RES, W, H, OX, OY
+    RES, W, H, OX, OY = r, 96 * r, 176 * r, 0, 0
+
+
+def set_window(x0, y0, w, h):
+    """一部分（例：頭だけ）を描く：試作を速くするため。座標は RES 倍の画面のピクセル。"""
+    global W, H, OX, OY
+    OX, OY, W, H = x0, y0, w, h
 
 
 def face_closeup(base, scale):
