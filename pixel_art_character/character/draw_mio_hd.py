@@ -301,7 +301,7 @@ def make_pose(bob=0.0):
     P = _make_pose_v8(bob)
     up = v3(0, bob, 0)
     P["head"] = P["head"] + v3(0, HEAD_DOWN, 0)    # 首を短く（頭が大きい 4.5 頭身では首が長く見えた）
-    P["elbow_R"], P["wrist_R"] = B.ik(P["shoulder_R"], v3(1.6, 97.0, 11.8) + up, B.BONES["upper_arm"],
+    P["elbow_R"], P["wrist_R"] = B.ik(P["shoulder_R"], v3(3.4, 97.2, 11.8) + up, B.BONES["upper_arm"],
                                       B.BONES["forearm"], v3(0.8, -0.6, -0.6))
     return P
 
@@ -331,6 +331,19 @@ def render_base(bob=0.0):
                          inflate=SOCK_SLIM, cut=g.cut)
             ng.set_xf(np.zeros(3), B.BODY_SCALE, np.zeros(3))
             groups[i] = ng
+        if g.name.startswith("sleeve_"):
+            # 袖を細めに：肩から袖口まで同じ太さの筒・肩パッドのような角に見えた（講評）。袖口は少しだけ広がる
+            np_ = []
+            for p in g.prims:
+                if p.tag == "sleeve_up":
+                    np_.append(B.RoundCone(p.a, p.b, 4.4, 3.8, p.tag))
+                elif p.tag == "sleeve_fore":
+                    np_.append(B.RoundCone(p.a, p.b, 3.7, 4.3, p.tag))
+                elif p.tag in ("shoulder_cap", "elbow"):
+                    np_.append(B.Ellipsoid(p.c, p.r * (0.9 if p.tag == "shoulder_cap" else 0.88), p.R, p.tag))
+                else:
+                    np_.append(p)
+            g.prims = np_
         if g.name == "torso_skin":
             # 首を細く（顎と同じ幅の円柱に見えた）
             g.prims = [B.RoundCone(p.a, p.b, NECK_R[0], NECK_R[1], p.tag) if p.tag == "neck" else p for p in g.prims]

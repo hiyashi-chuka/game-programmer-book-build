@@ -231,12 +231,16 @@ def draw(img, gmap, names, P, Rv, D):
     outer = np.zeros_like(hair)
     innerl = np.zeros_like(hair)
     crown_ids = [i for i, c in enumerate(clumps) if c[0] == "crown"]
+    bang_ids = [i for i, c in enumerate(clumps) if c[0] == "bang"]
+    top_region = pt.mask([(-20.0, 26.8), (20.0, 26.8), (20.0, 40.0), (-20.0, 40.0)])
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         nh = sh(hair, dx, dy)
         nt = sh(top, dx, dy, -1)
         outer |= hair & ~nh
         innerl |= hair & nh & (nt < top) & (nt >= 0) & ~np.isin(nt, [i for i, c in enumerate(clumps) if c[2] == "fill"]) \
-            & ~(np.isin(top, crown_ids) & np.isin(nt, crown_ids))   # 頭頂の束どうしは線を引かない（網目に見えた）
+            & ~(np.isin(top, crown_ids) & np.isin(nt, crown_ids)) \
+            & ~(top_region & np.isin(top, crown_ids + bang_ids) & np.isin(nt, crown_ids + bang_ids))
+        # ↑ 頭頂の束どうし、頭頂付近の前髪の根元どうしには線を引かない（分け目のまわりが星形の網目に見えた）
     lit_side = sh(hair, -2 * RES, -2 * RES) & ~sh(hair, 2 * RES, 2 * RES)
     line_dark = col["line"]
     line_lit = col["line"] * 0.7 + col["s2"] * 0.3
