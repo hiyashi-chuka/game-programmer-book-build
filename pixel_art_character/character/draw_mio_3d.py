@@ -201,7 +201,7 @@ def make_pose(bob=0.0):
     P = {}
     up = v3(0, bob, 0)
     P["neck_pit"] = v3(0, 119.1, 1.5) + up
-    P["head"] = v3(0, 124.2, -0.5) + up
+    P["head"] = v3(0, 127.0, -0.5) + up   # v4 より 2.8px 上げて首を長く（首 0.20 → 0.28 頭、docs/11）
     P["shoulder_L"] = v3(-15.6, 117.2, -1.5) + up
     P["shoulder_R"] = v3(15.6, 120.4, -1.5) + up
     P["hip_L"], P["hip_R"] = v3(-7.6, 81.3, 0), v3(6.9, 79.8, 0)
@@ -344,27 +344,43 @@ def face_prims(P):
     Rh = head_frame(P)
     o = P["head"]
     L = lambda x, y, z: o + Rh @ v3(x, y, z)
-    return [
-        Ellipsoid(L(0, 17.5, -1.0), (13.3, 13.3, 13.3), Rh, "cranium"),
-        Ellipsoid(L(0, 8.0, 2.6), (11.6, 8.6, 9.4), Rh, "cheek_jaw"),   # 頬と顎（アニメは頬が広く顎が小さい）
-        Ellipsoid(L(0, 2.6, 5.2), (3.9, 2.4, 3.0), Rh, "chin"),
+    # 顔の輪郭（docs/11 11-2）：頭蓋は横にやや広い球、頬は目の下で一番広く、
+    # そこから顎先へ「なめらかな V」で細くなる。顎の角（えら）は作らない
+    out = [
+        Ellipsoid(L(0, 17.5, -1.0), (13.7, 13.3, 13.3), Rh, "cranium"),
+        Ellipsoid(L(0, 10.6, 2.2), (11.8, 6.6, 9.2), Rh, "cheek"),
+        Ellipsoid(L(0, 2.8, 5.4), (3.2, 2.2, 2.7), Rh, "chin"),
     ]
+    for s in (-1, 1):
+        # 頬骨：3/4 向きで奥の輪郭の「目の下の外側」に小さなふくらみを作る
+        out.append(Ellipsoid(L(s * 8.4, 11.4, 7.8), (2.6, 2.0, 2.0), Rh, "cheekbone"))
+        # 顎のライン：頬から顎先へ細くなる円錐
+        out.append(RoundCone(L(s * 9.0, 8.6, 2.6), L(s * 1.6, 2.8, 5.4), 3.0, 2.2, "jaw"))
+    return out
 
 
 def hand_prims(P):
+    """手：v4 は小さすぎた（拳の長さ 6px ≒ 0.2 頭）。アニメの女性の手は「顎〜目の下」くらい
+    （手首〜指先 ≒ 0.4〜0.45 頭）。手のひら＝角の丸い箱、指＝円錐（docs/11 11-1）。"""
     out = []
-    # 右手：前腕の向きの先でストラップを握る拳
+    # 右手：ストラップを握る拳（指は手のひらの前で曲がる）
     u = nrm(P["wrist_R"] - P["elbow_R"])
     F = frame(u, v3(0, 0, 1))
-    c = P["wrist_R"] + u * 3.0
-    out.append(Ellipsoid(c, (2.7, 3.2, 2.3), F, "fist"))
-    out.append(RoundCone(c + F[:, 0] * -1.8 + F[:, 2] * 1.4, c + F[:, 0] * -0.6 + F[:, 1] * 2.2 + F[:, 2] * 1.8, 1.0, 0.8, "thumb"))
-    # 左手：バッグの上に添える（甲を上に、指先はバッグの前へ垂れる）
+    A = lambda x, y, z, c0: c0 + F[:, 0] * x + F[:, 1] * y + F[:, 2] * z
+    c = P["wrist_R"] + u * 3.4
+    out.append(RoundBox(c, (2.5, 2.9, 1.2), 0.9, F, "palm"))
+    for i, sx in enumerate((-1.9, -0.65, 0.65, 1.9)):
+        out.append(RoundCone(A(sx, 2.6, 0.6, c), A(sx * 0.95, 1.6, 2.6, c), 0.95, 0.85, "finger"))
+    out.append(RoundCone(A(-2.6, -0.8, 1.0, c), A(-1.4, 1.6, 2.6, c), 1.05, 0.85, "thumb"))
+    # 左手：バッグの上に手のひらを乗せ、指先はバッグの前へ垂れる
     u = nrm(P["wrist_L"] - P["elbow_L"])
     F = frame(u, v3(0, 1, 0))
-    c = P["wrist_L"] + u * 2.6
-    out.append(Ellipsoid(c, (2.8, 3.0, 1.5), F, "palm"))
-    out.append(RoundCone(c + u * 2.4, c + u * 4.0 + v3(0, -2.6, 0.6), 1.1, 0.9, "fingers"))
+    A = lambda x, y, z, c0: c0 + F[:, 0] * x + F[:, 1] * y + F[:, 2] * z
+    c = P["wrist_L"] + u * 3.2
+    out.append(RoundBox(c, (2.6, 3.2, 0.9), 0.7, F, "palm"))
+    for sx, ln in ((-1.9, 3.6), (-0.65, 4.4), (0.65, 4.2), (1.9, 3.4)):
+        out.append(RoundCone(A(sx, 3.2, 0.2, c), A(sx * 1.05, 3.2 + ln * 0.6, -ln * 0.75, c), 0.8, 0.65, "finger"))
+    out.append(RoundCone(A(2.7, -0.6, 0.2, c), A(3.2, 2.2, -0.6, c), 0.9, 0.7, "thumb"))
     return out
 
 
@@ -373,6 +389,11 @@ def hand_prims(P):
 # ===========================================================================
 def body_suit(torso, inflate):
     return [Ellipsoid(p.c, p.r + inflate, p.R, p.tag) for p in torso if p.tag in ("ribcage", "breast", "abdomen")]
+
+
+# 靴（かかと → つま先）。足の長さ ≒ 0.66 頭（v4 の 0.62 は少し小さすぎた。docs/11 11-1）
+SHOES = (("shoe_w", v3(-3.0, 0.0, -4.6), v3(-4.5, 0.0, 15.4)),
+         ("shoe_f", v3(8.0, 5.0, -5.8), v3(6.5, 0.0, 13.6)))
 
 
 def build_scene(bob=0.0, anatomy=False):
@@ -436,7 +457,7 @@ def build_scene(bob=0.0, anatomy=False):
         # --- カーディガン：肩・胸を大きくふくらませた殻＋胸から裾まで真っすぐ落ちる筒。前を開ける ---
         drape_top, Rt = TX((0, 104.0, -0.4))
         drape_bot, Rb = TX((0, 79.2, -0.2))
-        card_prims = [Ellipsoid(p.c, p.r + 2.3, p.R, p.tag) for p in torso
+        card_prims = [Ellipsoid(p.c, p.r + 1.9, p.R, p.tag) for p in torso
                       if p.tag in ("ribcage", "breast", "deltoid", "trapezius")]
         card_prims.append(RoundCone(drape_top, drape_bot, 12.4, 13.6, "drape"))
         hem_n = Rb @ v3(0, 1, 0)
@@ -487,8 +508,7 @@ def build_scene(bob=0.0, anatomy=False):
 
     # --- 靴（ローファー）：足の座標系（かかと→つま先）で作る -------------------------
     shoes = []
-    for name, heel, toe in (("shoe_w", v3(-3.0, 0.0, -4.4), v3(-4.4, 0.0, 14.2)),
-                            ("shoe_f", v3(8.0, 5.0, -5.6), v3(6.6, 0.0, 12.6))):
+    for name, heel, toe in SHOES:
         fwd = nrm(toe - heel)
         F = frame(fwd, v3(0, 1, 0))           # 列 = 横, 前（つま先）, 上
         side, up = F[:, 0], F[:, 2]
@@ -510,30 +530,68 @@ def build_scene(bob=0.0, anatomy=False):
     Rh = head_frame(P)
     o = P["head"]
     HL = lambda x, y, z: o + Rh @ v3(x, y, z)
-    hair = [Ellipsoid(HL(0, 18.4, -1.6), (14.6, 14.2, 14.6), Rh, "crown")]
-    hair.append(Ellipsoid(HL(0, 11.0, -3.0), (16.6, 14.6, 14.4), Rh, "bob"))
-    # 後ろ〜横の毛束（ボブの表面に沿って、毛先で外へ跳ねる）
-    for ang in np.radians([-150, -125, -100, -78, -55, -32, 32, 55, 78, 100, 125, 150]):
-        ca, sa = math.cos(ang), math.sin(ang)
-        r0, r1 = 13.8, 16.2
-        p0 = HL(sa * r0, 22, -3.6 + ca * -r0 * 0.9)
-        p1 = HL(sa * r1, 6, -3.6 + ca * -r1 * 0.88)
-        p2 = HL(sa * (r1 + 5.2), -2.4, -3.0 + ca * -(r1 + 4.0) * 0.88)   # 毛先は肩の上で外へ跳ねる
-        hair.append(RoundCone(p0, p1, 3.0, 2.6, "strand"))
-        hair.append(RoundCone(p1, p2, 2.6, 1.0, "strand_tip"))
+    HC = v3(0, 17.5, -1.0)      # 頭蓋の中心（頭の座標）
+
+    def chain(pts, radii, tag, n=3):
+        """制御点を通るなめらかな曲線に沿って、太さが変わる円錐をつなげた毛束。"""
+        cs = []
+        P2 = [HL(*p) for p in pts]
+        curve = []
+        m = len(P2)
+        for i in range(m - 1):
+            p0, p1, p2_, p3 = P2[max(i - 1, 0)], P2[i], P2[i + 1], P2[min(i + 2, m - 1)]
+            for j in range(n):
+                t = j / n
+                curve.append(0.5 * (2 * p1 + (-p0 + p2_) * t + (2 * p0 - 5 * p1 + 4 * p2_ - p3) * t * t
+                                    + (-p0 + 3 * p1 - 3 * p2_ + p3) * t ** 3))
+        curve.append(P2[-1])
+        rr = np.interp(np.linspace(0, 1, len(curve)), np.linspace(0, 1, len(radii)), radii)
+        for i in range(len(curve) - 1):
+            cs.append(RoundCone(curve[i], curve[i + 1], rr[i], rr[i + 1], tag))
+        return cs
+
+    def on_skull(d, r):
+        d = d / np.linalg.norm(d)
+        return tuple(HC + d * r)
+
+    # 髪の土台：頭蓋より 1〜1.5px 大きい頭のふくらみ＋ボブのかたまり（毛束の下地）
+    hair = [Ellipsoid(HL(0, 18.4, -1.4), (14.9, 14.3, 14.8), Rh, "crown")]
+    hair.append(Ellipsoid(HL(0, 11.2, -3.2), (16.0, 14.2, 14.2), Rh, "bob"))
+    # 後ろ〜横の毛束：すべてつむじ（頭頂の後ろ寄り、少し右）から頭の丸みに沿って流れ、
+    # 耳の高さから下へ落ちて、肩の上で外へ跳ねる。太さと長さを「大・中・小」で変えて規則的にしない
+    whorl = np.array([-0.18, 0.78, -0.6])
+    widths = [3.4, 2.3, 3.0, 2.0, 3.6, 2.5, 3.2, 2.1, 3.5, 2.7, 3.0, 2.2, 3.3]
+    tipdy = [-0.6, 0.6, -1.4, 0.9, -0.2, -1.0, 0.4, -1.6, 0.2, 0.8, -0.9, 0.5, -0.4]
+    for k, az in enumerate(np.linspace(-138, 138, 13)):
+        a_ = math.radians(az)
+        hor = np.array([math.sin(a_), 0.0, -math.cos(a_)])
+        eq = hor + np.array([0, 0.18, 0])
+        p0 = on_skull(whorl * 0.8 + eq * 0.2, 14.6)
+        p1 = on_skull(whorl * 0.45 + eq * 0.55, 14.4)     # 上の方は土台の中に沈めて、表面はなめらかに
+        p2 = on_skull(eq, 14.6)
+        p3 = tuple(np.array([0, 5.0, -2.6]) + hor * 15.2)
+        p4 = tuple(np.array([0, 0.6 + tipdy[k] * 0.5, -2.6]) + hor * 16.8)   # 下の方で束が分かれて見える
+        p5 = tuple(np.array([0, -2.6 + tipdy[k], -2.4]) + hor * (20.6 + 0.4 * tipdy[k]))
+        w = widths[k]
+        hair += chain([p0, p1, p2, p3, p4, p5], [w * 0.7, w * 0.85, w * 0.85, w * 0.8, w * 0.6, 0.45], "strand")
     front = []   # 横髪と前髪は「顔の前を空ける」切り取りの対象外にするため別グループ
-    # 横髪（顔の両側）
-    for s in (-1, 1):
-        pts = [HL(s * 11.4, 21, 7.2), HL(s * 13.0, 9, 7.8), HL(s * 14.8, 0.0, 7.4), HL(s * 18.6, -3.0, 6.8)]
-        rs = [2.8, 2.4, 1.5, 0.7]
-        for i in range(3):
-            front.append(RoundCone(pts[i], pts[i + 1], rs[i], rs[i + 1], "side_lock"))
-    # 前髪：生え際から額の前へ垂れる束。束の間から額が見える（シースルーバング）
-    for x0, x1, tip_y in ((-10.0, -10.8, 19.2), (-6.6, -7.0, 18.0), (-3.2, -3.4, 18.8), (0.0, -0.4, 15.6),
-                          (3.4, 3.4, 18.6), (6.8, 7.2, 18.0), (10.0, 10.8, 19.4)):
-        pts = [HL(x0 * 0.9, 27.6, 5.0), HL(x0, 24.0, 11.6), HL(x1, tip_y, 13.4)]
-        front.append(RoundCone(pts[0], pts[1], 2.4, 1.9, "bang"))
-        front.append(RoundCone(pts[1], pts[2], 1.9, 0.35, "bang_tip"))
+    # 横髪：こめかみから頬に沿って S 字に下り、毛先で外へ跳ねる。後ろにもう1本細い束を重ねる
+    for s_ in (-1, 1):
+        front += chain([(s_ * 11.6, 22.0, 7.0), (s_ * 12.8, 14.0, 8.2), (s_ * 12.5, 7.5, 8.2),
+                        (s_ * 13.9, 1.4, 7.4), (s_ * 16.8, -2.4, 6.4)], [2.8, 2.6, 2.2, 1.4, 0.45], "side_lock")
+        front += chain([(s_ * 13.2, 21.0, 4.6), (s_ * 14.4, 12.0, 5.6), (s_ * 15.0, 4.0, 5.2),
+                        (s_ * 17.2, 0.6, 4.4)], [2.0, 1.8, 1.2, 0.4], "side_lock")
+    # 前髪：分け目（画面左寄り）から放射状に流れる。中央の束が一番長く太い、間に細い束。
+    # 毛先は少し内側（中央）へ向け、束の間から額が見える（シースルーバング）
+    part_x = -2.4
+    bangs_spec = [(-11.0, -11.8, 19.8, 1.7), (-8.0, -8.6, 17.8, 2.4), (-5.0, -4.6, 18.8, 1.4),
+                  (-1.8, -1.0, 16.0, 2.8), (1.6, 2.4, 17.4, 2.4), (4.8, 5.4, 18.9, 1.4),
+                  (8.0, 8.6, 17.6, 2.3), (11.0, 11.9, 19.9, 1.6)]
+    for rx, tx, ty, w in bangs_spec:
+        root_x = part_x + (rx - part_x) * 0.55
+        inward = -0.5 if tx > 0 else 0.5
+        front += chain([(root_x, 28.6, 4.2), (rx, 25.6, 11.0), (tx * 0.98, (25.0 + ty) / 2, 12.9),
+                        (tx + inward, ty, 13.4)], [w * 0.9, w, w * 0.55, 0.3], "bang")
     # アホ毛
     ah = [HL(0.6, 30.4, 1.8), HL(2.4, 34.4, 1.2), HL(5.2, 36.6, 0.4), HL(7.6, 35.8, 0.0)]
     for i, rr in enumerate([(0.9, 0.7), (0.7, 0.55), (0.55, 0.35)]):
@@ -556,7 +614,7 @@ def build_scene(bob=0.0, anatomy=False):
         return np.stack([x, y, rel[:, 2]], axis=1) + o
 
     # 束（strand 以外）は smin を小さくして束感を残す
-    groups.append(Group("hair", MAT["hair"], hair, k=1.2, cut=hair_cut, warp=hair_warp))
+    groups.append(Group("hair", MAT["hair"], hair, k=2.0, cut=hair_cut, warp=hair_warp))
     groups.append(Group("bangs", MAT["hair"], front, k=0.8, warp=hair_warp))
 
     if not anatomy:
@@ -720,7 +778,9 @@ def render(bob=0.0, eyes="open", anatomy=False, yaw=BODY_YAW, face_details=True)
     lv[deep] = 4
     occ = ambient_occlusion(groups, Ph + N * 0.1, N)
     noao = np.isin(gid, [names.index("face")])
-    lv[(occ > 2.6) & ~noao] = np.minimum(lv[(occ > 2.6) & ~noao] + 1, 4)
+    is_hair = np.isin(gid, [names.index("hair"), names.index("bangs")])
+    th = np.where(is_hair, 4.2, 2.6)    # 髪は束の溝が多いので、オクルージョンを弱めて暗くなりすぎないように
+    lv[(occ > th) & ~noao] = np.minimum(lv[(occ > th) & ~noao] + 1, 4)
 
     # 髪：鏡面反射のハイライト＝天使の輪（毛束の溝で自然に途切れる）
     hi_ = names.index("hair")
@@ -778,10 +838,14 @@ def render(bob=0.0, eyes="open", anatomy=False, yaw=BODY_YAW, face_details=True)
     return img, P, Rv
 
 
+HAIR_JUMP = 5.0   # 髪の中の輪郭線は深さが大きく飛ぶ所（束が手前に重なる所）だけ：線を減らしてアニメらしく
+
+
 def outlines(img, gmap, vz, lvmap, mats, groups, anatomy):
     """輪郭線：パーツ ID が変わる所・深度が大きく飛ぶ所に、手前側のピクセルへ1px の線。
     明部は明るめの線、影は濃い線（線の強弱）。"""
     out = img.copy()
+    hair_ids = [i for i, g in enumerate(groups) if g.name in ("hair", "bangs")]
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         ng = shift(gmap, dx, dy)
         nz = shift(vz, dx, dy)
@@ -791,7 +855,8 @@ def outlines(img, gmap, vz, lvmap, mats, groups, anatomy):
         here = gmap >= 0
         edge_empty = here & (ng < 0)
         diff = here & (ng >= 0) & (ng != gmap) & (vz > nz)
-        jump = here & (ng >= 0) & (ng == gmap) & (vz - nz > 3.0)
+        jt = np.where(np.isin(gmap, hair_ids), HAIR_JUMP, 3.0)
+        jump = here & (ng >= 0) & (ng == gmap) & (vz - nz > jt)
         e = edge_empty | diff | jump
         ys, xs = np.where(e)
         for y, x in zip(ys, xs):
@@ -848,6 +913,135 @@ def texture_details(img, idx, Ph, gid, names, lv, P, bob):
             paint(m & (Ph[:, 1] < 1.6), 1, "shoes")
 
 
+# ---------------------------------------------------------------------------
+# 顔パーツのスタンプ（docs/11 11-5：2020年代の目・顔）
+# ---------------------------------------------------------------------------
+FACE_STYLE = "modern"   # "classic" で v4 までの目（比較用）
+
+MODERN_PAL = {
+    "c": hx("#d9a29a"),  # 二重のライン（細く、肌より少し濃い色）
+    "K": hx("#4a2638"),  # 上まぶたのライン（黒ではなく暗い赤紫）
+    "k": hx("#86505f"),  # まつ毛の毛束・中間色
+    "q": hx("#f8dde4"),  # まつ毛の上の白い描き込み（白抜き）
+    "W": hx("#ffffff"),
+    "w": hx("#e6dbe8"),  # 白目のまぶたの影（髪色を少し映した淡い色）。白目の両端は暗く中央は明るい
+    "U": hx("#46408f"),  # 瞳の上部の差し色（虹彩と違う系統の青紫）
+    "d": hx("#5a2f72"),  # 虹彩の暗部
+    "I": hx("#9a58b0"),  # 虹彩
+    "J": hx("#e47fb6"),  # 虹彩の下部（ピンク）
+    "G": hx("#ffc6e2"),  # 虹彩の最下部の照り返し
+    "P": hx("#2e1840"),  # 瞳孔（小さめ）
+    "L": hx("#ffffff"),  # ハイライト（小さな点）
+    "l": hx("#f2e6ff"),  # 小さな副ハイライト
+    "b": hx("#c88a94"),  # 下まつ毛（目尻側だけ）
+    "x": hx("#c6f2ff"),  # 瞳の下部の補色のきらめき（水色）
+    "p": hx("#f0a2aa"),  # 目頭の赤み（涙丘・粘膜の色）
+    "t": hx("#fff4ee"),  # 涙袋のハイライト
+    "r": hx("#ffc2b8"),  # 涙袋の下の赤み（サーモンピンク）
+}
+
+#   列0 = 目尻（外側）、列7 = 目頭。8×8 の目（v4 の 8×10 より横長）＋二重・下まつ毛・涙袋（docs/11 11-5）
+EYE_MODERN = [
+    "..cccc..",   # 0 二重のライン（細く、目尻寄り）
+    "k.KKKKk.",   # 1 まつ毛の毛束（目尻に1本はね）
+    "KKKqkkkK",   # 2 上まぶたのライン：目尻が太く目頭へ細く。q＝白抜き
+    "KwUUUUdw",   # 3 目尻が下がる（たれ目）。まぶたの厚みの影が白目と瞳の上に落ちる。U＝瞳の上部の差し色
+    ".wdLPPdW",   # 4 d＝虹彩のふち（輪郭の暗い輪）、L＝小さなハイライト、P＝瞳孔
+    ".WdIPPdW",   # 5
+    ".WdIIIdW",   # 6
+    ".WdJJxIp",   # 7 下は明るい（反射光）、x＝補色の小さなきらめき、p＝目頭の赤み（涙丘）
+    "..JGGJ..",   # 8 扇形の照り返し
+    ".bb.....",   # 9 下まつ毛は目尻側だけ
+    "..tttt..",   # 10 涙袋のハイライト
+]
+EYE_MODERN_HALF = [
+    "........",
+    "........",
+    "........",
+    "..cccc..",
+    "k.KKKKk.",
+    "KKKqkkkK",
+    "KwdLPPdw",
+    ".WdJJxIp",
+    "..JGGJ..",
+    ".bb.....",
+    "..tttt..",
+]
+EYE_MODERN_CLOSED = [
+    "........",
+    "........",
+    "........",
+    "........",
+    "..cccc..",
+    "........",
+    "k.......",
+    "KK....KK",
+    "..KKKK..",
+    ".k.k....",
+    "..tttt..",
+]
+IRIS_ROWS = {3, 4, 5, 6, 7, 8}   # 瞳の行（右目にするとき左右反転しない）
+
+
+def mirror_eye(rows, iris_rows):
+    """右目：まぶた・まつ毛の形は左右反転、瞳とハイライトの向きはそのまま（寄り目防止）。"""
+    out = []
+    for j, r in enumerate(rows):
+        m = r[::-1]
+        out.append(m[0] + r[2:7] + m[6:] if j in iris_rows else m)
+    return out
+
+
+def draw_face_modern(put, eyes, hi_, bi):
+    rows = {"open": EYE_MODERN, "half": EYE_MODERN_HALF, "closed": EYE_MODERN_CLOSED}[eyes]
+    iris = IRIS_ROWS if eyes == "open" else ({6, 7, 8} if eyes == "half" else {7})
+    far = [r[:1] + r[2:] for r in rows]          # 奥の目（3/4 向き）は1列狭く
+    # 目は前髪の上にも描く（前髪越しに目元が見える「透け」。まつ毛が前髪に隠れると眠そうに見える）
+    put((-7.3, 12.9, 11.6), far, MODERN_PAL, allow=(bi,))
+    put((7.3, 12.9, 11.6), mirror_eye(rows, iris), MODERN_PAL, allow=(bi,))
+    # 眉：細く短く、前髪越しに透ける
+    put((-7.0, 19.6, 12.4), ["..EEEE"], FACE_PAL, allow=(hi_, bi))
+    put((7.0, 19.6, 12.4), ["EEEE.."], FACE_PAL, allow=(hi_, bi))
+    put((0.4, 8.0, 12.6), ["N"], FACE_PAL)                      # 鼻は1px の影だけ
+    put((0.2, 5.8, 11.9), ["MmmM", ".MM."], {"M": hx("#b45a66"), "m": hx("#e8848e")})   # 小さく開いた口
+    # チーク：斜線は使わず、目の下に横長でやわらかく（2段階の色）
+    soft = {"r": hx("#ffd0c6"), "R": hx("#ffb6ae")}
+    put((-8.4, 8.4, 10.4), [".rrr", "rRRr", ".rr."], soft)
+    put((9.0, 8.4, 10.4), ["rrrr.", "rRRRr", ".rrr."], soft)
+
+
+def draw_face_classic(put, eyes, hi_, bi):
+    eye_open = [
+        "..KKKKK.",
+        "KKKkkkKK",
+        ".KwddddK",
+        ".WdddddW",
+        ".WdLLPdW",
+        ".WdLLPIW",
+        ".WIIPPIW",
+        ".WIJJGIW",
+        "..JGGJ..",
+        "...bbb..",
+    ]
+    eye_half = ["........", "........", "........", "..KKKKK.", "KKKkkkKK", ".WdddddW", ".WdLLPIW",
+                ".WIJJGIW", "..JGGJ..", "...bbb.."]
+    eye_closed = ["........"] * 6 + ["KK......", ".KKKKKKK", "..k..k..", "........"]
+    rows = {"open": eye_open, "half": eye_half, "closed": eye_closed}[eyes]
+    right = []
+    for r in rows:
+        m = r[::-1]
+        right.append(m[0] + r[2:7] + m[6:] if r[2:7].strip(".") else m)
+    far = [r[:1] + r[2:] for r in rows]
+    put((-7.3, 13.6, 11.6), far, EYE_PAL)
+    put((7.3, 13.6, 11.6), right, EYE_PAL)
+    put((-7.0, 20.0, 12.4), ["..EEEE", ".E...."], FACE_PAL, allow=(hi_, bi))
+    put((7.0, 20.0, 12.4), [".EEEE..", ".....E."], FACE_PAL, allow=(hi_, bi))
+    put((0.4, 8.0, 12.6), ["N"], FACE_PAL)
+    put((0.2, 5.8, 11.9), ["M..M", ".MM."], FACE_PAL)
+    put((-8.6, 8.9, 10.2), [".BBB", "BCBC"], FACE_PAL)
+    put((9.2, 8.9, 10.2), ["BBBB.", "BCBCB"], FACE_PAL)
+
+
 def draw_face(img, gmap, vz, names, P, Rv, eyes):
     fi, hi_, bi = names.index("face"), names.index("hair"), names.index("bangs")
     Rh = head_frame(P)
@@ -869,36 +1063,10 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes):
                     continue
                 img[py, px] = pal[ch]
 
-    eye_open = [
-        "..KKKKK.",
-        "KKKkkkKK",
-        ".KwddddK",
-        ".WdddddW",
-        ".WdLLPdW",
-        ".WdLLPIW",
-        ".WIIPPIW",
-        ".WIJJGIW",
-        "..JGGJ..",
-        "...bbb..",
-    ]
-    eye_half = ["........", "........", "........", "..KKKKK.", "KKKkkkKK", ".WdddddW", ".WdLLPIW",
-                ".WIJJGIW", "..JGGJ..", "...bbb.."]
-    eye_closed = ["........"] * 6 + ["KK......", ".KKKKKKK", "..k..k..", "........"]
-    rows = {"open": eye_open, "half": eye_half, "closed": eye_closed}[eyes]
-    right = []
-    for r in rows:
-        m = r[::-1]
-        right.append(m[0] + r[2:7] + m[6:] if r[2:7].strip(".") else m)
-    # 奥の目（画面左＝キャラの右目）は 3/4 向きで幅が縮む：白目の列を1つ減らす
-    far = [r[:1] + r[2:] for r in rows]
-    put((-7.0, 13.6, 11.6), far, EYE_PAL)
-    put((7.0, 13.6, 11.6), right, EYE_PAL)
-    put((-7.0, 20.0, 12.4), ["..EEEE", ".E...."], FACE_PAL, allow=(hi_, bi))
-    put((7.0, 20.0, 12.4), [".EEEE..", ".....E."], FACE_PAL, allow=(hi_, bi))
-    put((0.4, 8.0, 12.6), ["N"], FACE_PAL)
-    put((0.2, 5.8, 11.9), ["M..M", ".MM."], FACE_PAL)
-    put((-8.4, 8.9, 10.3), [".BBB", "BCBC"], FACE_PAL)
-    put((9.0, 8.9, 10.3), ["BBBB.", "BCBCB"], FACE_PAL)
+    if FACE_STYLE == "classic":
+        draw_face_classic(put, eyes, hi_, bi)
+    else:
+        draw_face_modern(put, eyes, hi_, bi)
     # ヘアクリップ（キャラの左のこめかみ＝画面右）
     clip = [".ppp...", "pPPPpq.", "pPhPPPq", ".pPPPq.", "..qqq.."]
     put((11.0, 24.5, 9.0), clip, {"p": ACC["clip_line"], "P": ACC["clip"], "h": ACC["clip_hi"],
@@ -959,7 +1127,8 @@ ANAT_COLORS = {
     "malleolus_medial": "#ffffff", "malleolus_lateral": "#ffffff", "femur": "#fff4e0",
     "ribcage": "#cccccc", "breast": "#cccccc", "abdomen": "#cccccc", "pelvis": "#cccccc", "gluteus": "#cccccc",
     "deltoid": "#e88a6a", "trapezius": "#d0a060", "neck": "#ffd8c8", "sternocleidomastoid": "#e86a8a",
-    "clavicle": "#ffffff", "cranium": "#ffe1cf", "cheek_jaw": "#ffe1cf", "chin": "#ffe1cf",
+    "clavicle": "#ffffff", "cranium": "#ffe1cf", "cheek": "#ffe1cf", "chin": "#ffe1cf", "jaw": "#ffe1cf",
+    "cheekbone": "#ffe1cf", "palm": "#ffe1cf", "finger": "#ffe1cf", "thumb": "#ffe1cf",
     "humerus": "#fff4e0", "biceps": "#e86a6a", "triceps": "#b07ad0", "brachialis": "#f08a7a",
     "olecranon": "#ffffff", "epicondyle": "#ffffff", "radius_ulna": "#fff4e0", "brachioradialis": "#f2b45a",
     "flexors": "#f090c0", "extensors": "#c06090", "wrist": "#fff4e0",
@@ -1017,8 +1186,38 @@ def composite(sprite, scale, P=None, Rv=None):
     return Image.fromarray(base, "RGBA").resize((w * scale, h * scale), Image.NEAREST)
 
 
+def report():
+    """アニメ顔に合う体の比率（docs/11 11-1・11-3）を 3D モデルから計測して表示する。"""
+    P = make_pose(0.0)
+    Rh = head_frame(P)
+    o = P["head"]
+    top = (o + Rh @ v3(0, 30.8, -1.0))[1]
+    chin = (o + Rh @ v3(0, 0.6, 5.4))[1]
+    head = top - chin
+    face_w = 2 * 13.7 * math.sqrt(1 - (3.9 / 13.3) ** 2)        # 目の高さでの顔の幅
+    eye_w, eye_cx = 8.0, 7.3
+    rows = [
+        ("頭身", top / head),
+        ("首の長さ（顎〜頸窩）÷ 頭の高さ", (chin - P["neck_pit"][1]) / head),
+        ("首の幅 ÷ 顔の幅", 8.6 / face_w),
+        ("肩幅（三角筋の外側）÷ 顔の幅", 2 * (15.0 + 4.2) / face_w),
+        ("手の長さ（手首〜指先）÷ 頭の高さ", (2 * 3.2 + 1.4 + 4.4 * 0.6 + 1.0) / head),
+        ("足の長さ（靴の中の足）÷ 頭の高さ", np.linalg.norm(SHOES[0][2] - SHOES[0][1]) / head),
+        ("目の幅 ÷ 顔の幅", eye_w / face_w),
+        ("両目の間 ÷ 目の幅", (2 * eye_cx - eye_w) / eye_w),
+        ("目尻〜輪郭 ÷ 目の幅", (face_w / 2 - eye_cx - eye_w / 2) / eye_w),
+        ("目の中心（頭頂から）", (30.8 - 13.6) / head),
+        ("鼻（頭頂から）", (30.8 - 8.0) / head),
+        ("口（頭頂から）", (30.8 - 5.8) / head),
+        ("髪の厚み（頭頂）÷ 頭の高さ", (18.4 + 14.3 - 30.8) / head),
+    ]
+    for k, v in rows:
+        print(f"{k}: {v:.2f}")
+
+
 def main():
     import time
+    report()
     os.makedirs(OUT, exist_ok=True)
     t0 = time.time()
     img0, P, Rv = render(0.0, "open")
