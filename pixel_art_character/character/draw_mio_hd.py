@@ -1,8 +1,8 @@
 """ミオ HD（v9）：解像度を上げて、プロのイラストの描き方を取り入れた版（docs/15）。
 
-3D の人体モデル（draw_mio_3d.py の v8）を RES 倍の解像度でレイマーチし、
-- 肌：影の境目に彩度の高い色（プロの塗りの「境目の赤み」）
-- 髪：毛束ごとの ID から束の分かれ目に細い線、毛先の線は細く抜く
+3D の人体モデル（draw_mio_3d.py の v8）を RES 倍（4 倍＝384×704）の解像度でレイマーチし、
+- 肌：顔の影は額だけ（頬に影を入れるとやつれて見える）、手足は 2 段、影の境目に彩度の高い色
+- 髪：法線を球へ寄せて影を大きな形に、毛束の座標で束の影・毛流れの線・毛先の透け・天使の輪を描く
 - 線：色トレス（線の色を下の色の暗い版に）、光の当たる外側は明るい線
 - 顔：目・眉・鼻・口・頬を、頭の座標で定義した形（曲線）から高解像度で描く
 を行う。
@@ -24,7 +24,7 @@ v3, nrm = B.v3, B.nrm
 HAIR_HD = dict(line="#69402f", s2="#a8705a", s1="#c99378", base="#e0b392", lt="#f3d3b4", hi="#fff6e8")
 MAT["hair"].update({k: hx(v) for k, v in HAIR_HD.items()})
 
-RES = 2                       # 解像度の倍率（v8 の 96×176 → 192×352）
+RES = 4                       # 解像度の倍率（v8 の 96×176 → 384×704）
 W, H = 96 * RES, 176 * RES
 OUT = B.OUT
 
@@ -82,6 +82,58 @@ def chain_ids(group):
     return np.array(ids)
 
 
+def strand_coords(group, Ph, Vm):
+    """毛束の座標：各点について (束の番号, u＝根元 0〜毛先 1, v＝束の中心からの横の位置 -1〜1, 横の距離)。
+    3D のアニメ調モデルで、毛束に沿って髪のテクスチャ（毛流れの線・ハイライト）を描くのと同じ考え方。"""
+    Q = group.to_src(Ph)
+    Q = Q if group.warp is None else group.warp(Q)
+    prims = group.prims
+    ds = np.stack([p.d(Q) for p in prims], axis=1)
+    j = ds.argmin(axis=1)
+    cid = chain_ids(group)
+    # 鎖ごとの長さ
+    seg_len = np.array([np.linalg.norm(p.b - p.a) if isinstance(p, B.RoundCone) else 0.0 for p in prims])
+    start = np.zeros(len(prims))
+    total = {}
+    for i in range(len(prims)):
+        if i > 0 and cid[i] == cid[i - 1]:
+            start[i] = start[i - 1] + seg_len[i - 1]
+        total[cid[i]] = start[i] + seg_len[i]
+    u = np.full(len(Q), -1.0)
+    v = np.zeros(len(Q))
+    lat = np.zeros(len(Q))
+    for k in np.unique(j):
+        p = prims[k]
+        if not isinstance(p, B.RoundCone):
+            continue
+        m = j == k
+        ba = p.b - p.a
+        L = np.linalg.norm(ba)
+        h = np.clip(((Q[m] - p.a) @ ba) / (L * L), 0, 1)
+        A = p.a + np.outer(h, ba)
+        r = p.r1 + (p.r2 - p.r1) * h
+        side = np.cross(ba / L, Vm)
+        side = side / max(np.linalg.norm(side), 1e-6)
+        if side[0] < 0:        # 横の向きを画面の右＝正にそろえる（光は左上）
+            side = -side
+        lat[m] = (Q[m] - A) @ side
+        v[m] = lat[m] / np.maximum(r, 0.3)
+        u[m] = (start[k] + h * L) / max(total[cid[k]], 1e-6)
+    return cid[j], u, np.clip(v, -1.5, 1.5), lat
+
+
+def sharpen_tips(group, extend=1.2, tip=0.04):
+    """毛先を尖らせる：鎖の最後の部品を少し延ばし、先端の半径をほぼ 0 にする（丸い指のような毛先を防ぐ）。"""
+    cid = chain_ids(group)
+    for i, p in enumerate(group.prims):
+        if not isinstance(p, B.RoundCone):
+            continue
+        last = i == len(group.prims) - 1 or cid[i + 1] != cid[i]
+        if last:
+            d = (p.b - p.a) / np.linalg.norm(p.b - p.a)
+            group.prims[i] = B.RoundCone(p.a, p.b + d * extend, p.r1, tip, p.tag)
+
+
 # ===========================================================================
 # 2. セルルックの描画
 # ===========================================================================
@@ -119,6 +171,8 @@ def render_base(bob=0.0):
             ng = B.Group("tee", g.mat, g.prims + extra, k=g.k, cut=g.cut)
             ng.set_xf(np.zeros(3), B.BODY_SCALE, np.zeros(3))
             groups[i] = ng
+        if g.name in ("hair", "bangs") and HAIR_SHARP:
+            sharpen_tips(g)
     Pw, hit, Rv = raymarch(groups)
     names = [g.name for g in groups]
     gi = {n: k for k, n in enumerate(names)}
@@ -145,6 +199,15 @@ def render_base(bob=0.0):
         ns = ns / np.linalg.norm(ns, axis=1, keepdims=True) + Vm * 0.9
         N[mface] = ns / np.linalg.norm(ns, axis=1, keepdims=True)
 
+    # 髪の法線を「頭を包む球の法線」と混ぜる：束ごとの円柱の影（糸っぽさ）が消え、影が大きな形にまとまる
+    # （アニメ調 3D モデルの髪の法線調整と同じ考え方。docs/15）
+    mh_all = np.isin(gid, [gi["hair"], gi["bangs"]])
+    if mh_all.any():
+        hc = P["head"] + Rh @ v3(0, 14.0, -2.0)
+        nsph = Ph_src[mh_all] - hc
+        nsph = nsph / np.linalg.norm(nsph, axis=1, keepdims=True)
+        nm = (1 - HAIR_SPHERE) * N[mh_all] + HAIR_SPHERE * nsph
+        N[mh_all] = nm / np.linalg.norm(nm, axis=1, keepdims=True)
     lam = N @ Lm
     lam -= 0.10 * np.clip((100 - Ph[:, 1]) / 100, 0, 1)
     for gname, b in (("hair", -0.14), ("bangs", -0.08)):
@@ -161,11 +224,19 @@ def render_base(bob=0.0):
     lv[ao] = np.minimum(lv[ao] + 1, 4)
 
     # 単純化（docs/14）：顔はベタ＋落ち影、髪は 3 段（解像度が上がったので v8 の 2 段から 1 段戻す）
-    lv[mface] = np.where(lit[mface], 2, 3)
+    # 顔の影は「前髪の下の額」だけ（プロのアニメ塗り）。横髪の落ち影が頬や顎に入ると、頬がこけて
+    # やつれて見えるので消す。顎の下の影は首の側に入る
+    ql_f = (Ph_src[mface] - P["head"]) @ Rh
+    lv[mface] = np.where(~lit[mface] & (ql_f[:, 1] > FACE_SHADOW_Y), 3, 2)
     lv[is_hair] = np.clip(lv[is_hair], 1, 3)
     mb = gid == gi["bangs"]                       # 前髪：束ごとの丸みの縞を消し、ベタ＋落ち影＋束の下の影だけ
     lv[mb] = np.where(lit[mb] & (occ[mb] < 4.6), 2, 3)
     lv[(lv == 4) & ~deep] = 3
+    # 手足の肌：アニメ塗りの 2 段（明るい面と、光と反対側の 1 本の影）＋すねの細いツヤ。
+    # 細かな凹凸の影（膝・ふくらはぎのまだら）は消す
+    limbs = np.isin(gid, [gi[n] for n in ("leg_w", "leg_f", "arm_L", "arm_R", "hands")])
+    lv[limbs] = np.where(lit[limbs] & (lam[limbs] > 0.12), 2, 3)
+    lv[limbs & lit & (lam > 0.86)] = 1
 
     # 天使の輪
     mh = gid == gi["hair"]
@@ -175,23 +246,33 @@ def render_base(bob=0.0):
 
     # 毛束の番号（束の分かれ目の線に使う）
     strand = np.full(W * H, -1)
+    su = np.full(len(idx), -1.0)       # 毛束の上の位置（根元 0〜毛先 1）
+    sv = np.zeros(len(idx))            # 毛束の中心からの横の位置（-1〜1、画面の右が正）
+    slat = np.zeros(len(idx))
     for name in ("hair", "bangs"):
         g = gi[name]
         m = gid == g
         if m.any():
-            cid = chain_ids(groups[g])
-            strand[idx[m]] = cid[groups[g].nearest_prim(Ph[m])] + (0 if name == "hair" else 1000)
+            c_, u_, v_, l_ = strand_coords(groups[g], Ph[m], Vm)
+            strand[idx[m]] = c_ + (0 if name == "hair" else 1000)
+            su[m], sv[m], slat[m] = u_, v_, l_
 
     # 天使の輪（docs/15）：頭の丸みに沿った帯。頭頂から頭の高さの約 25% 下、光の側（画面左）だけ。
     # 毛束ごとに上端を上下にずらしてギザギザにし、束の途中で途切れさせる
     st = strand[idx]
     jit = ((st * 7919) % 11) / 10.0 - 0.5
     ring_c = 23.6 + 0.9 * jit
-    band = is_hair & (st >= 0) & (np.abs(ql[:, 1] - ring_c) < 0.95 + 0.35 * jit) & (ql[:, 0] < 5.0 + 3.0 * jit) \
-        & (ql[:, 2] > -7.0) & lit
+    # 束ごとに「レンズ形」：束の中心で一番太く、束の縁で細くなって途切れる → ギザギザのツヤが並ぶ
+    taper = np.clip(1 - np.abs(sv) ** 2, 0, 1)
+    taper = np.where(su >= 0, taper, 1.0)
+    dy = ql[:, 1] - ring_c
+    hh = (1.05 + 0.35 * jit) * taper
+    band = is_hair & (st >= 0) & (np.abs(dy) < hh) & (ql[:, 0] < 5.0 + 3.0 * jit) & (ql[:, 2] > -7.0) & lit
     lv[band] = 1
-    core = band & (np.abs(ql[:, 1] - ring_c) < 0.5 + 0.2 * jit) & (ql[:, 0] < 3.0)
+    core = band & (np.abs(dy + 0.15) < hh * 0.5) & (ql[:, 0] < 3.0)
     lv[core] = 0
+    under_ring = is_hair & (st >= 0) & ~band & (dy < -hh) & (dy > -hh - 0.45 * taper - 0.05) \
+        & (ql[:, 0] < 4.0 + 3.0 * jit) & (ql[:, 2] > -7.0) & lit & (taper > 0.3)
 
     img = np.zeros((W * H, 4), np.uint8)
     mats = [g.mat for g in groups]
@@ -200,9 +281,15 @@ def render_base(bob=0.0):
         for k in range(5):
             img[idx[m & (lv == k)]] = ramp(mats[g], k)
     for k in range(5):
-        img[idx[inner & (lv == k)]] = ramp(MAT["inner"], min(k + 1, 4))
+        c = ramp(MAT["inner"], min(k, 4))      # 顎の横で暗くなりすぎないよう 1 段明るく
+        if k >= 3:
+            c = mix(c, hx("#9a6ab8"), 0.25)    # 内側の影は紫寄り（寒色で空気感）
+        img[idx[inner & (lv == k)]] = c
 
     B.texture_details(img, idx, Ph_src, gid, names, lv, P, bob)   # カーディガンのリブ・靴下の口ゴムなど
+    if HAIR_TEXTURE:
+        hair_texture(img, idx, is_hair, lv, lit, su, sv, slat, strand[idx], ql, inner,
+                     is_bang=(gid == gi["bangs"]), ring=under_ring)
 
     # 肌の影の境目に彩度の高い色（明るい側の 1px）：プロの塗りでよく使う「境目の赤み」
     lv_full = np.full(W * H, -1)
@@ -231,7 +318,9 @@ def render_base(bob=0.0):
     vz[idx] = (Ph @ Rv.T)[:, 2]
     vz = vz.reshape(H, W)
 
-    img = outlines(img, gmap, vz, lvmap, strand.reshape(H, W), mats, groups)
+    su_full = np.full(W * H, -1.0)
+    su_full[idx] = su
+    img = outlines(img, gmap, vz, lvmap, strand.reshape(H, W), mats, groups, su_full.reshape(H, W))
     return dict(img=img, gmap=gmap, vz=vz, names=names, P=P, Rv=Rv, groups=groups, bob=bob)
 
 
@@ -259,18 +348,71 @@ def grade(img, gmap):
     img[..., :3] = np.where(m[..., None], np.clip(soft, 0, 255), rgb).astype(np.uint8)
 
 
+FACE_SHADOW_Y = 16.0        # 顔に落ち影を入れるのはこの高さ（頭の座標）より上＝額だけ
 LEG_SLIM = -0.45            # 脚を細くする量（距離関数を内側へずらす）
+HAIR_SPHERE = 0.6           # 髪の法線を球の法線へ寄せる割合
+HAIR_SHARP = True           # 毛先を尖らせる
+HAIR_TEXTURE = True         # 毛束に沿った質感（毛流れの線・束の影・毛先の明るさ）
 SKIN_TERM = hx("#ffbcaa")   # 肌の影の境目（明るい側）に置く彩度の高い色
 HAIR_JUMP = 6.0
 
 
-def outlines(img, gmap, vz, lvmap, strand, mats, groups):
+def hair_texture(img, idx, is_hair, lv, lit, su, sv, slat, st, ql, inner, is_bang=None, ring=None):
+    """毛束の座標を使って、髪に質感を付ける（docs/15）。
+    - 束の影：各束の光と反対側（画面右）の縁を 1 段暗く → 平たいリボンが重なった立体感
+    - 毛流れの線：束の中ほどから毛先へ、細い線を 1〜2 本（束ごとに位置をずらす）
+    - 毛先：先の方を明るく（光が透ける・柔らかい）
+    """
+    hm = HAIR_HD
+    col = {k: np.array(hx(v)[:3], float) for k, v in hm.items()}
+    out = img.reshape(-1, 4)
+    hsh = (st * 2654435761) % 1000 / 1000.0          # 束ごとの乱数（0〜1）
+    on = is_hair & (su >= 0) & ~inner
+    cur = out[idx, :3].astype(float)
+
+    def blend(mask, c, a):
+        cur[mask] = cur[mask] * (1 - a) + c * a
+
+    # 束の影（画面右の縁）。根元は土台に溶けるので u > 0.15 から
+    side_sh = on & (sv > 0.45 + 0.2 * hsh) & (su > 0.15) & (lv <= 2)
+    blend(side_sh, col["s1"], 0.75)
+    # 束の光（画面左の縁を少し明るく）
+    side_lt = on & (sv < -0.55) & (su > 0.2) & (su < 0.8) & lit & (lv == 2)
+    blend(side_lt, col["lt"], 0.45)
+    # 毛流れの線：束ごとに 1 本（太い束は 2 本）。細い線＝今の色と影色の中間
+    for k, off in enumerate((-0.25, 0.3)):
+        v0 = off + 0.25 * (hsh - 0.5)
+        line = on & (np.abs(slat - v0 * 1.6) < LINE_W / RES * 1.8) & (su > 0.35 + 0.2 * hsh) & (su < 0.93) \
+            & (np.abs(sv) < 0.85)
+        if k == 1:
+            line &= hsh > 0.45
+        blend(line, col["s2"], 0.45)
+    # 前髪の毛先の透け感：顔にかかる先の方に肌の色を混ぜる
+    skin = np.array(MAT["skin"]["base"][:3], float)
+    bt = on & is_bang & (su > 0.55)
+    a2 = np.clip((su - 0.55) / 0.45, 0, 1) * 0.3
+    cur[bt] = cur[bt] * (1 - a2[bt, None]) + skin * a2[bt, None]
+    # 毛先を明るく（先 12% を明るい色へ、先ほど強く）
+    tip = on & (su > 0.86)
+    a = np.clip((su - 0.86) / 0.14, 0, 1) * 0.45
+    cur[tip] = cur[tip] * (1 - a[tip, None]) + col["lt"] * a[tip, None]
+    # 天使の輪のすぐ下に細い影：輪が目立つ
+    if ring is not None:
+        blend(ring & on, col["s1"], 0.6)
+    out[idx, :3] = np.clip(cur, 0, 255).astype(np.uint8)
+
+
+LINE_W = 1.0
+
+
+def outlines(img, gmap, vz, lvmap, strand, mats, groups, su_map=None):
     """色トレスの輪郭線（1px）。
     - 外形（背景との境目）：光の当たる側は素材の影色、影側は素材の線の色
     - パーツの境目・深さの飛び：手前側に線
     - 毛束の分かれ目：奥側の束に細い影色の線（線ではなく「溝」として）"""
     out = img.copy()
     hair_ids = [i for i, g in enumerate(groups) if g.name in ("hair", "bangs")]
+    face_id = [i for i, g in enumerate(groups) if g.name == "face"][0]
     here = gmap >= 0
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         ng = shift(gmap, dx, dy, -1)
@@ -290,12 +432,28 @@ def outlines(img, gmap, vz, lvmap, strand, mats, groups):
             lit = lvmap[y, x] <= 2
             dark = m["line"]
             soft = mix(m["line"], m.get("s2", m["s1"]), 0.55)
+            if su_map is not None and su_map[y, x] > 0.82:   # 毛先は線を抜く：先へ行くほど明るい線
+                a = min((su_map[y, x] - 0.82) / 0.18, 1.0)
+                dark = mix(m["line"], m["s2"], 0.35 + 0.5 * a)
+                soft = mix(m["line"], m["s1"], 0.5 + 0.4 * a)
+            if gmap[y, x] == face_id:      # 顔の輪郭は細く柔らかい色に（濃い輪郭は頬をこけて見せる）
+                dark, soft = mix(m["line"], m["s2"], 0.45), mix(m["line"], m["s2"], 0.8)
             if edge_empty[y, x]:
                 out[y, x] = soft if lit else dark
             elif jump[y, x]:
                 out[y, x] = m.get("s2", m["s1"]) if lit else soft
             else:
                 out[y, x] = soft if lit else dark
+        # 髪の外周は影側だけ 2px（線の強弱：光の側は細く、影側は太く）。毛先は太くしない
+        if RES >= 3:
+            thick = edge_empty & np.isin(gmap, hair_ids) & (lvmap >= 3)
+            if su_map is not None:
+                thick &= su_map < 0.8
+            for y, x in zip(*np.where(thick)):
+                yi, xi = y - dy, x - dx
+                if 0 <= yi < H and 0 <= xi < W and gmap[yi, xi] == gmap[y, x]:
+                    m = mats[gmap[y, x]]
+                    out[yi, xi] = mix(m["line"], m["s2"], 0.5)
     return out
 
 
@@ -310,7 +468,7 @@ FP = dict(
     eye_h=0.93,                # 目の高さの倍率（大きすぎると違和感：docs/12）
     brow_x=7.2, brow_y=19.1,   # 眉
     nose=(0.5, 7.7), mouth=(0.3, 5.8),
-    blush=(8.3, 8.0),
+    blush=(8.7, 7.0),          # 目の真下に付けると「目の下の赤み（疲れ）」に見えるので、少し下・外へ
 )
 EYE_C = {
     "line": hx("#3e1f33"),     # 上まぶたの線（黒でなく暗い赤紫）
@@ -329,7 +487,7 @@ EYE_C = {
     "hl2": hx("#f4e8ff"),
     "spark": hx("#c6f0ff"),    # 補色のきらめき
     "lower": hx("#b77d8a"),    # 下まぶた
-    "caruncle": hx("#f09aa4"), # 目頭の赤み
+    "caruncle": hx("#f6b8bc"), # 目頭の赤み（淡く）
     "tear": hx("#fff3ee"),     # 涙袋のハイライト
 }
 
@@ -406,9 +564,9 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes, groups):
     # --- 頬の赤み（目の下、横長の楕円。中心ほど濃い） ---
     for side in (-1, 1):
         bx, by = FP["blush"]
-        e = ((X - side * bx) / 2.9) ** 2 + ((Y - by) / 1.25) ** 2
-        paint(e < 1.0, mix(MAT["skin"]["base"], hx("#ffb4ac"), 0.55))
-        paint(e < 0.45, mix(MAT["skin"]["base"], hx("#ff9a98"), 0.6))
+        e = ((X - side * bx) / 2.7) ** 2 + ((Y - by) / 1.15) ** 2
+        paint(e < 1.0, mix(MAT["skin"]["base"], hx("#ffb4ac"), 0.42))
+        paint(e < 0.4, mix(MAT["skin"]["base"], hx("#ffa0a0"), 0.5))
 
     # --- 目 ---
     for side in (-1, 1):
@@ -455,7 +613,7 @@ def draw_face(img, gmap, vz, names, P, Rv, eyes, groups):
         paint(inside & (((X - (icx + 0.95)) / 0.42) ** 2 + ((Y - (icy - 0.75)) / 0.42) ** 2 < 1), EYE_C["hl2"], 0.9)
         paint(inside & (((X - (icx - 0.85)) / 0.36) ** 2 + ((Y - (icy - 1.25)) / 0.36) ** 2 < 1), EYE_C["spark"], 0.9)
         # 目頭の赤み
-        paint(inside & (s > 0.78), EYE_C["caruncle"], 0.85)
+        paint(inside & (s > 0.9) & (t < 0.3) & (t > -0.6), EYE_C["caruncle"], 0.85)   # 大きいと充血して見える
         # 上まぶたの線：目尻が太く目頭へ細い。目尻の外へ少し跳ねる
         lid = (s > -1.22) & (s < 1.0) & (t >= top - 0.05) & (t < top + lw)
         paint(lid, EYE_C["line"], 0.9)
@@ -516,6 +674,9 @@ MOUTH_C = hx("#b05866")
 
 def stamp(img, gmap, cx, cy, rows, pal, on):
     """ドットの型を画面の (cx, cy) を中心に置く。on のパーツの上だけに描く。"""
+    k = max(1, RES // 2)                     # 4 倍以上の解像度では型を 2 倍に
+    if k > 1:
+        rows = ["".join(ch * k for ch in r) for r in rows for _ in range(k)]
     h, w = len(rows), max(len(r) for r in rows)
     x0, y0 = int(round(cx - w / 2)), int(round(cy - h / 2))
     for j, row in enumerate(rows):
@@ -567,10 +728,12 @@ def draw_accessories(img, gmap, names, P, Rv, bob):
     stamp(img, gmap, x, y, ["lggggggl", "lGGGGGGl"], {"l": MAT["bag"]["line"], "g": ACC["gold"], "G": hx("#c89a40")},
           ids("bag"))
     # 膝・肘の血色（肌より少し赤い小さな楕円）
-    blush = mix(MAT["skin"]["base"], hx("#ffa8a0"), 0.5)
+    yy, xx = np.mgrid[0:H, 0:W]
     for side, leg in (("L", "leg_w"), ("R", "leg_f")):
         x, y, _ = pj(P["knee_" + side] + v3(0, 0.8, 3.4))
-        stamp(img, gmap, x, y, [".bb.", "bbbb", ".bb."], {"b": blush}, ids(leg))
+        m = ((xx + 0.5 - x) / (1.6 * RES)) ** 2 + ((yy + 0.5 - y) / (0.9 * RES)) ** 2 < 1
+        m &= np.isin(gmap, ids(leg))
+        img[m, :3] = (img[m, :3] * 0.7 + np.array(hx("#ffa8a0")[:3]) * 0.3).astype(np.uint8)   # 柔らかく混ぜる
 
 
 def composite(sprite, scale, P=None, Rv=None):
@@ -622,7 +785,7 @@ def main():
     import time
     B.apply_preset("v8")
     os.makedirs(OUT, exist_ok=True)
-    for r, tag, zoom in ((3, "mio_hd", 2), (2, "mio_hd2", 3)):
+    for r, tag, zoom in ((4, "mio_hd", 2), (2, "mio_hd2", 4)):
         set_res(r)
         t0 = time.time()
         bases = {0: render_base(0.0), 1: render_base(1.0)}
@@ -630,8 +793,8 @@ def main():
         img, P, Rv, _ = finish(bases[0], "open")
         Image.fromarray(img, "RGBA").save(os.path.join(OUT, tag + "_1x.png"))
         composite(img, zoom, P, Rv).save(os.path.join(OUT, f"{tag}_x{zoom}.png"))
-        if r == 3:
-            face_closeup(bases[0], 4).save(os.path.join(OUT, "mio_hd_face_x4.png"))
+        if r == 4:
+            face_closeup(bases[0], 3).save(os.path.join(OUT, "mio_hd_face_x3.png"))
             seq = [(0, "open", 400), (1, "open", 400), (0, "open", 400), (1, "open", 300),
                    (1, "half", 60), (1, "closed", 90), (1, "half", 60), (1, "open", 300),
                    (0, "open", 400), (1, "open", 400), (0, "open", 400), (1, "open", 400)]
@@ -645,9 +808,11 @@ def main():
             frames[0].save(os.path.join(OUT, "mio_hd_idle_x2.gif"), save_all=True, append_images=frames[1:],
                            duration=durs, loop=0, disposal=1)
     # v8 と HD の比較（同じ表示サイズ）
-    v8 = Image.open(os.path.join(OUT, "mio3d_x6.png")).convert("RGB")
+    v8 = Image.open(os.path.join(OUT, "mio3d_1x.png")).convert("RGBA")
+    v8 = composite(np.array(v8), 8)
     hd3 = Image.open(os.path.join(OUT, "mio_hd_x2.png")).convert("RGB")
-    hd2 = Image.open(os.path.join(OUT, "mio_hd2_x3.png")).convert("RGB")
+    hd2 = Image.open(os.path.join(OUT, "mio_hd2_x4.png")).convert("RGB")
+    v8 = v8.convert("RGB")
     sheet = Image.new("RGB", (v8.width * 3 + 40, v8.height), (255, 255, 255))
     for i, im in enumerate((v8, hd2, hd3)):
         sheet.paste(im, (i * (v8.width + 20), 0))

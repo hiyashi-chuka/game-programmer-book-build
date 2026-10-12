@@ -3,9 +3,9 @@
 「解像度を上げてよい、細部まで検討してよい」という条件で、プロのイラストレーター・アニメーター・ドット絵師の描き方を調べ、**もっと可愛く・自然に** するための方法をまとめました。あわせて、それを実装した HD 版（v9）を作りました。
 
 図：
-- `character/output/compare_v8_hd.png`：v8（96×176）、HD 2倍（192×352）、HD 3倍（288×528）を同じ大きさで比較
-- `character/output/mio_hd_face_x4.png`：HD の顔（開き・半目・閉じ・にっこり）
-- `character/output/mio_hd_x2.png` / `mio_hd_1x.png`：HD 3倍の完成画像
+- `character/output/compare_v8_hd.png`：v8（96×176）、HD 2倍（192×352）、HD 4倍（384×704）を同じ大きさで比較
+- `character/output/mio_hd_face_x3.png`：HD の顔（開き・半目・閉じ・にっこり）
+- `character/output/mio_hd_x2.png` / `mio_hd_1x.png`：HD 4倍（384×704）の完成画像
 - `character/output/mio_hd_idle_x2.gif`：呼吸とまばたき
 
 > 調べ方の注意：この環境では Web ページの本文を開けず、すべて **検索結果の要約** から集めました。数値のうち出典が無いものは【目安】と書いています（ドット絵向けに換算した値）。特定の作家の絵柄は真似せず、共通する原理だけを取り出しています。
@@ -14,9 +14,9 @@
 
 ## 15-1. なぜ解像度を上げると良くなるのか
 
-| 96×176（v8） | 288×528（HD 3倍） |
+| 96×176（v8） | 384×704（HD 4倍） |
 |---|---|
-| 顔の幅が約 25px、目が 8×6px。目の形・瞳のグラデーション・まつ毛の束を **1px 単位の記号** で表すしかない | 顔の幅が約 75px、目が約 24×18px。上まぶたの太さの変化、まつ毛の束、瞳の上下のグラデーション、ハイライト3つを **形として** 描ける |
+| 顔の幅が約 25px、目が 8×6px。目の形・瞳のグラデーション・まつ毛の束を **1px 単位の記号** で表すしかない | 顔の幅が約 100px、目が約 32×24px。上まぶたの太さの変化、まつ毛の束、瞳の上下のグラデーション、ハイライト3つを **形として** 描ける |
 | 髪は 2 段の明暗と輪郭線だけ | 毛束の分かれ目（溝）、天使の輪のギザギザ、毛先の細さが出せる |
 | 眉・首元・手など、数 px の部品が周りの線に埋もれやすい | 部品どうしの間に余白を取れる |
 
@@ -49,7 +49,7 @@ Octopath Traveler の監督は「ドット絵にぎりぎり見える高解像�
 2. 目・眉・鼻・口・頬を、その座標の **曲線と楕円の式** で塗る。
 3. 前髪の上の部分は、透かして塗る（透け目・透け眉）。
 
-こうすると、斜め向きの奥の目は自然に狭くなり、顔の丸みに沿って形が曲がる。スタンプ（固定のドット絵）と違い、**解像度を変えても同じ形で描ける**（2倍でも3倍でも同じプログラム）。
+こうすると、斜め向きの奥の目は自然に狭くなり、顔の丸みに沿って形が曲がる。スタンプ（固定のドット絵）と違い、**解像度を変えても同じ形で描ける**（2倍でも4倍でも同じプログラム）。
 
 ---
 
@@ -110,7 +110,7 @@ Octopath Traveler の監督は「ドット絵にぎりぎり見える高解像�
 
 | 項目 | v8 | **HD（v9）** |
 |---|---|---|
-| 解像度 | 96×176 | **288×528（3倍）**。2倍（192×352）も出力 |
+| 解像度 | 96×176 | **384×704（4倍）**。2倍（192×352）も出力 |
 | 目 | 8×6px のスタンプ | 頭の座標の式で描く。5 段の瞳、ハイライト 3 つ、根元が太いまつ毛 3 本、目尻へ太くなる上まぶた |
 | 眉 | 肌の上に 2 行 | 前髪の上の透け眉 |
 | 表情 | 開き・半目・閉じ | ＋にっこり（∩ の目、開いた口と舌） |
@@ -122,7 +122,56 @@ Octopath Traveler の監督は「ドット絵にぎりぎり見える高解像�
 | 仕上げ | — | 上は暖色、下は寒色の色調補正 |
 | 小物 | 1px 単位 | ハート形のヘアクリップ、金の細い鎖とチャーム、2×2 のボタン |
 
-`python3 draw_mio_hd.py` で HD の画像をすべて作り直せる（約 4 分）。顔の形は `FP`（位置）、`EYE_TOP` / `EYE_BOT` / `LID_W`（目の形）、`EYE_C`（目の色）で調整できる。
+`python3 draw_mio_hd.py` で HD の画像をすべて作り直せる（約 10 分）。顔の形は `FP`（位置）、`EYE_TOP` / `EYE_BOT` / `LID_W`（目の形）、`EYE_C`（目の色）で調整できる。
+
+---
+
+## 15-9. 顔がやつれて見える問題（影の入れすぎ）
+
+4 倍にして細部が見えるようになると、「影のせいでやつれて見える」という指摘がありました。原因と直し方：
+
+| 原因 | 直し方 | 根拠 |
+|---|---|---|
+| 横髪の落ち影が **頬から顎に大きく** 入り、頬がこけて見えた | 顔の落ち影は **前髪の下の額だけ**（頭の座標で高さ 16 より上）。頬・顎には影を入れない | アニメ塗りでは顔はほぼベタで、影は前髪の下と顎の下（首）に置く |
+| 頬の赤みが **目の真下に接して**、目の下の赤み（疲れ・クマ）に見えた | 赤みを少し下・外へずらし、薄く小さく | 涙袋や目の下を濃くするとクマに見える |
+| 目頭の赤みが大きく、充血して見えた | 目頭のごく一部だけ、淡い色に | — |
+| 顔の輪郭線が濃い赤茶で、頬がへこんで見えた | 顔の輪郭だけ細く柔らかい色に | 外側の線は太くてよいが、顔は柔らかく |
+| 顎の横のインナーカラー（濃いピンク）が顔を暗く縁取った | インナーカラーを 1 段明るく、影は紫寄りに | 後ろ髪の内側は寒色で空気感を出す |
+| 脚の影がまだらで、膝の赤みが「＋」形の点に見えた | 手足の肌は 2 段（明るい面と 1 本の影）＋すねの細いツヤ。膝の赤みは柔らかい楕円 | アニメ塗りは影を単色の段で表す |
+
+**確認の仕方**：顔を拡大して、①頬に影が入っていないか、②目の下に赤みが接していないか、③目が充血して見えないか、④輪郭が暗く縁取られていないか、を見る。
+
+---
+
+## 15-10. 髪の質感と輪郭（さらに調べて改良）
+
+「髪の質感や輪郭ももっと良くできる」という指摘を受けて、髪の描き方をさらに調べました。
+
+### 分かったこと
+| 項目 | プロの描き方 |
+|---|---|
+| 束の形 | 断面は円柱でなく **平たいリボン**。細い線だけで描くと糸っぽく、デフォルメの顔と合わない。「シルエット → 太い束 → 中・細い束 → 隙間」の順に |
+| 影 | 3D のアニメ調モデルでは、髪の法線を **頭を包む球の法線へ寄せて**、影を束単位ではなく大きな形にまとめる（法線の調整） |
+| 毛先 | 筆のように細くなる。一様にギザギザだと単調。毛先の線は細く明るく抜く。前髪の毛先には肌の色を重ねて透けさせる |
+| 輪郭の線 | 外周は太く、内側の束の線は細く・途切れさせる。**光の側は細く、影側は太く**。線は隣の色より少し暗い色（色トレス） |
+| 天使の輪 | 頭の丸みに沿って、**束ごとに長さや高さを変えたギザギザ（N 字・M 字）**。すぐ下に暗い影を置くと輪が目立つ。純白でなく色の付いた白 |
+| 毛流れ | ベタだけでは質感が足りないので、流れに沿った薄い線を少し |
+| 後ろ髪の内側 | 暗く大まかに、寒色を入れて空気感 |
+
+### HD 版への反映
+1. **毛束の座標**：髪の各ピクセルについて、どの束の、根元から何割の位置か（u）、束の中心から横にどれだけか（v）を求める。3D モデルで髪のテクスチャを束に沿って描くのと同じで、以下はすべてこの座標で描く。
+2. **法線を球へ寄せる**（60%）：束ごとの円柱の縞が消え、影が大きな形にまとまった（糸っぽさが一番減った変更）。
+3. **毛先を尖らせる**：毛束の最後の部品を少し延ばして先端の半径をほぼ 0 に。丸い指のような毛先が、筆先のような形になった。
+4. **束の影と光**：各束の影側の縁を 1 段暗く、光側の縁を少し明るく → 平たい束が重なった立体感。
+5. **毛流れの線**：束の中ほどから毛先へ、細い線を 1〜2 本（束ごとに位置をずらす）。
+6. **毛先の透け**：先の 12% を明るく、前髪の先には肌の色を混ぜる。毛先の輪郭線も明るく抜く。
+7. **天使の輪**：束の中心で太く縁で細いレンズ形を束ごとにずらして並べ、すぐ下に細い影。
+8. **輪郭の強弱**：髪の外周は影側だけ 2px、毛先は太くしない。
+
+### 今後の候補
+- 毛束そのものを平たいリボン形にする（今は円錐の鎖）
+- ボブの毛先を「内巻き 8：外ハネ 2」に（今はすべて外ハネ）
+- 遊び毛を 2〜4 本だけ足す
 
 ---
 
@@ -138,6 +187,8 @@ Octopath Traveler の監督は「ドット絵にぎりぎり見える高解像�
 - [ ] 線は黒でなく色トレス。光の側の外周は明るい線
 - [ ] 手は自然な高さで物を握っている。首元・襟ぐりが自然
 - [ ] 顔にディザを使っていない
+- [ ] 顔の影は額だけ。頬・顎に影が無く、やつれて見えない
+- [ ] 髪の影は大きな形にまとまり、糸っぽくない。毛先は尖って明るく抜ける
 
 ---
 
@@ -153,6 +204,11 @@ Octopath Traveler の監督は「ドット絵にぎりぎり見える高解像�
 - [CLIP STUDIO（髪の描き方）](https://www.clipstudio.net/oekaki/archives/160962)、[パルミー（前髪）](https://www.palmie.jp/lessons/293)、[いちあっぷ（天使の輪）](https://ichi-up.net/2018/079)、[egaco（髪のハイライト）](https://comic.smiles55.jp/guide/13573/)、[CLIP STUDIO（透け感）](https://www.clipstudio.net/oekaki/archives/152759)
 - [CLIP STUDIO TIPS（肌の影の色）](https://tips.clip-studio.com/ja-jp/articles/8818)、[egaco（影の色相）](https://comic.smiles55.jp/guide/5257/)、[PRISMPLANE（アニメ塗り）](https://prismplane.jp/anime_style_coloring/)、[Scrapbox「明暗境界線」](https://scrapbox.io/onmk/明暗境界線)、[CLIP STUDIO（透明感のある肌）](https://www.clipstudio.net/oekaki/archives/163104)
 - [CLIP STUDIO（線の強弱）](https://www.clipstudio.net/oekaki/archives/152764)、[CLIP STUDIO（色トレス）](https://www.clipstudio.net/oekaki/archives/152709)、[CLIP STUDIO（光の入れ方）](https://www.clipstudio.net/oekaki/archives/153338)、[MediBang（オーバーレイの仕上げ）](https://medibangpaint.com/en/use/2021/06/how-to-finish-the-illustration-with-overlay)
+
+髪の質感・輪郭（15-10）：
+- [CLIP STUDIO（髪の描き方）](https://www.clipstudio.net/oekaki/archives/151677)、[egaco（毛束の分け方）](https://comic.smiles55.jp/guide/12743/)、[えしのーと（髪）](https://esinote.com/guide/body/hair)、[artwod（ヘルメットに見えない髪）](https://artwod.com/blog/how-to-draw-hair-that-doesnt-look-like-a-helmet)、[illustration-mag（髪作画）](https://illustration-mag.jp/pickup/hawtodraw_hair02)、[玄光社（ボブの描き方）](https://genkosha.pictures/illustration/23012747395)、[egaco（線の強弱）](https://comic.smiles55.jp/guide/25535/)、[canvas-cluster（色トレス）](https://canvas-cluster.com/color-trace-lineart/)
+- [ReL（髪のツヤ）](https://note.com/rel_illustrator/n/nc32146fb0000)、[ReL（柔らかくする仕上げ）](https://note.com/rel_illustrator/n/n2fe4c4c54f0d)、[ATAM ACADEMY（後ろ髪の影）](https://atam-academy.com/blog/49302/)、[パルミー（前髪の落ち影）](https://www.palmie.jp/lessons/289)
+- 3D のアニメ調モデル：[本村純也「GuiltyGearXrd's Art Style」](https://www.ggxrd.com/Motomura_Junya_GuiltyGearXrd.pdf)、[ログミー（ウマ娘のトゥーン表現）](https://logmi.jp/tech/articles/326058)、[GAME Watch（BLUE PROTOCOL）](https://game.watch.impress.co.jp/docs/news/1275034.html)、[Unity Toon Shader（天使の輪）](https://docs.unity3d.com/Packages/com.unity.toonshader@0.13/manual/AngelRing.html)、[Autodesk（セルルックの法線設定）](https://area.autodesk.jp/column/tutorial/maya-celllook-character/05-setting-normals/)
 
 ドット絵：
 - [itch.io「Selective outlines」](https://itch.io/t/2422252/pixel-tutorial-selective-outlines)、[Lospec「Pixel art outlines」](https://lospec.com/articles/pixel-art-outlines)、[Lospec「Using color」](https://lospec.com/articles/pixel-art-outlines-part-2-using-color)、[Pixel Parmesan（アンチエイリアス）](https://pixelparmesan.com/anti-aliasing-fundamentals-for-pixel-artists)、[Pixel Parmesan（ディザ）](https://pixelparmesan.com/dithering-for-pixel-artists)、[OpenGameArt（線と曲線）](https://opengameart.org/content/chapter-2-lines-and-curves)、[BuskHusker（GBA の顔グラ）](https://feuniverse.us/t/buskhuskers-gba-portraiting-tutorials/10927)、[SLYNYRD「Pixelblog 29」](https://www.slynyrd.com/blog/2020/7/28/pixelblog-29-anime-faces-and-hair)、[SLYNYRD「Pixelblog 1 パレット」](https://www.slynyrd.com/blog/2018/1/10/pixelblog-1-color-palettes)、[pixnote（陰影）](https://pixnote.net/en/learn/shading)

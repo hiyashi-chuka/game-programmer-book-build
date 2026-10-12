@@ -2,7 +2,7 @@
 
 生成AI（LLM）に渡して、**画像生成モデルを使わずに、テキストとコードだけで** アニメ調のドット絵キャラクターを描けるようにするための資料です。
 
-![ミオ（v9 / HD：288×528px、プロの描き方を取り入れた高解像度版）](character/output/mio_hd_x2.png)
+![ミオ（v9 / HD：384×704px、プロの描き方を取り入れた高解像度版）](character/output/mio_hd_x2.png)
 
 ## 資料
 
@@ -29,7 +29,7 @@
 
 [character/](character/) に、資料をもとに描いた「現代風の可愛い女性キャラクター」の例があります。
 
-- `character/draw_mio_hd.py`：v9（HD）の描画スクリプト。v8 の 3D モデルを 3 倍（と 2 倍）の解像度で描き、顔は頭の表面の模様として式で描く
+- `character/draw_mio_hd.py`：v9（HD）の描画スクリプト。v8 の 3D モデルを 4 倍（と 2 倍）の解像度で描き、顔は頭の表面の模様として式で描く
 - `character/draw_mio_3d.py`：v4〜v8 の描画スクリプト。3D の人体モデル（骨格・骨の目印・筋肉・服・髪）を作り、セルルックで描画（Python + numpy + Pillow）
 - `character/draw_mio.py`：v3 までの 2D の描画スクリプト
 - `character/output/`：PNG（等倍・6倍）とアイドルアニメ GIF、改善の比較（`compare_v1_v2_v3.png`）、ポーズの検討図（`pose_skeleton_x5.png`）
