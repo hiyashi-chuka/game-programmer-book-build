@@ -2,7 +2,7 @@
 
 生成AI（LLM）に渡して、**画像生成モデルを使わずに、テキストとコードだけで** アニメ調のドット絵キャラクターを描けるようにするための資料です。
 
-![ミオ](character/output/mio_x6.png)
+![ミオ（v4：3D の人体モデルから描画）](character/output/mio3d_x6.png)
 
 ## 資料
 
@@ -18,19 +18,21 @@
 | ⑦ | [docs/07_anime_face_and_body.md](docs/07_anime_face_and_body.md) | アニメキャラの顔・体：顔の比率、3/4向き・横顔、体の構成、可愛いポーズ、**ピクセル座標の標準テンプレート**、よくある破綻 |
 | ⑧ | [docs/08_volume_and_depth.md](docs/08_volume_and_depth.md) | **立体感の出し方**：平面的に見える原因の診断、光の家族と影の家族、単純な立体への置き換え、面積とコントラスト、線の強弱、クロスコンター、重なり・アングル、リムライト、**法線推定で陰影を計算する方法** |
 | ⑨ | [docs/09_proportion_pose_anatomy.md](docs/09_proportion_pose_anatomy.md) | **体の比率・顔の比率・ポーズ・人体構造の検討**：描いた絵の計測と問題点、比率の関係と目安、ルーミス法をもとにしたアニメ顔の比率、重心とコントラポスト、骨の長さと短縮、**骨格から肉付けして描く方法** |
+| ⑩ | [docs/10_3d_anatomy_and_anime_3d.md](docs/10_3d_anatomy_and_anime_3d.md) | **骨格・筋肉を3次元で捉えて描く方法とアニメ調3D**：4つの層（骨格・骨の目印・筋肉・脂肪と皮膚）、骨の目印と部位別の筋肉の表、脚のリズム、女性・アニメでの扱い、セルルックの技法（法線転写・輪郭線・髪の束・平らな目）、**3D の人体モデルを作ってドット絵にする手順** |
 
 ## 制作例
 
 [character/](character/) に、資料をもとに描いた「現代風の可愛い女性キャラクター」の例があります。
 
-- `character/draw_mio.py`：描画スクリプト（Python + numpy + Pillow）
+- `character/draw_mio_3d.py`：v4 の描画スクリプト。3D の人体モデル（骨格・骨の目印・筋肉・服・髪）を作り、セルルックで描画（Python + numpy + Pillow）
+- `character/draw_mio.py`：v3 までの 2D の描画スクリプト
 - `character/output/`：PNG（等倍・6倍）とアイドルアニメ GIF、改善の比較（`compare_v1_v2_v3.png`）、ポーズの検討図（`pose_skeleton_x5.png`）
 - `character/README.md`：キャラ仕様、描き方、セルフレビューで直した点
 
 ## 生成AIへの渡し方（例）
 
 ```text
-添付の資料 00〜09 を読んでください。00 の手順に従い、
+添付の資料 00〜10 を読んでください。00 の手順に従い、
 画像生成は使わずに、Python（numpy, Pillow）でドット絵を描いてください。
 キャラクター: 〇〇（年齢感、性格、髪型、服、小物、ポーズ）
 キャンバス: 96×156px、正面立ち
@@ -42,6 +44,7 @@
 - ドット絵の色ランプ・色相シフト：[gamedev.net "Color Palettes"](https://www.gamedev.net/articles/visual-arts/color-palettes-r4964/)、[Stardew Valley Modding Wiki "How to make pixel art"](https://stardewmodding.wiki.gg/wiki/How_to_make_pixel_art)、[BuskHusker's GBA Portraiting Tutorials](https://feuniverse.us/t/buskhuskers-gba-portraiting-tutorials/10927)、[Aseprite Community（Pixelblog 29 アニメ顔と髪）](https://community.aseprite.org/t/anime-face-based-off-slyndyrd/19607)
 - アニメの影・線の傾向：[文春オンライン（ゲゲゲの鬼太郎 第6期キャラクターデザイン）](https://bunshun.jp/articles/-/9168)、[Impression Change of a Female Character in Illustration by Shadow](https://openaccess.cms-conferences.org/publications/book/978-1-964867-13-7/article/978-1-964867-13-7_16)、[animetics "Line Theory 101"](https://animetics.net/2014/12/20/fun-with-numbers-line-theory-101/)
 - 立体感：[Proko "Practical Guide to Realistic Shading"](https://proko.com/880)、[The Drawing Source "Value, Light and Form"](https://www.thedrawingsource.com/light-and-form.html)、[Skillshare "10 minutes to better drawing: Values"](https://www.skillshare.com/en/classes/10-minutes-to-better-drawing-values/1530960833)、[OpenGameArt "Chapter 4: Shadow and light"](https://opengameart.org/content/chapter-4-shadow-and-light)、[Pokebip「Lexique du pixel-art」](https://www.pokebip.com/page/fanarts/tutos/pixel-art/lexique)、[CLIP STUDIO 公式講座](https://www.clipstudio.net/oekaki/archives/151107)、[マイナビニュース（線の強弱）](https://news.mynavi.jp/article/pentaball-25/)、[Adobe「奥行き」](https://www.adobe.com/jp/creativecloud/roc/blog/design/quiz-challenge/depth.html)、[itch.io devlog（リムライト）](https://pixel-beef.itch.io/xdasher/devlog/192949/4-things-we-did-to-add-light-and-depth-to-our-pixel-art-game)
+- 3D の解剖とアニメ調 3D：[Anatomy for Sculptors（肩の骨の目印）](https://anatomy4sculptors.com/blog/shoulder-bony-landmarks/)、[Artists Network（体の描き方）](https://www.artistsnetwork.com/art-subjects/portrait-figure/how-to-draw-bodies-lea-colie-wight/amp)、[Proko（首の筋肉）](https://www.proko.com/course-lesson/how-to-draw-neck-muscles-anatomy-and-motion/notes)、[Dessindigo（首）](https://dessindigo.com/en/blog/amp/drawing-tutorial/how-draw-neck)、[Wikipedia "Vastus medialis"](https://en.wikipedia.org/wiki/Vastus_medialis)、[Creative Bloq（脚の描き方）](https://www.creativebloq.com/how-to/draw-legs)、[GDC Vault "GuiltyGearXrd's Art Style"](https://gdcvault.com/play/1022031/GuiltyGearXrd-s-Art-Style-The)、[Motomura Junya の講演資料](https://www.ggxrd.com/Motomura_Junya_GuiltyGearXrd.pdf)、[CGWORLD（セルルックの法線転写）](https://cgworld.jp/special/masterclass-online/vol15/ginneko3d/)、[CGWORLD（Pencil+ 法線コピー）](https://cgworld.jp/regular/pencil+3-vol3.html)、[lilToon の SDF 顔影](https://scrapbox.io/onigiri-tiken/%E3%80%90Unity%E3%80%91%E3%82%B7%E3%82%A7%E3%83%BC%E3%83%80%E3%83%BC%EF%BC%9AlilToon%E3%81%A7SDF%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%9F%E9%A1%94%E5%BD%B1)、[3D モデルのアウトライン（背面法）](https://scrapbox.io/motoso/3D%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E3%82%A2%E3%82%A6%E3%83%88%E3%83%A9%E3%82%A4%E3%83%B3)、[Godot アニメ顔シェーダー](https://godotshaders.com/shader/anime-style-face-shader/)、[Blender のアニメ調表現](https://www.strayspark.studio/blog/how-to-get-anime-toon-look-blender)、[VRM の目のカスタマイズ](https://cgpaws.substack.com/p/customizing-3d-eyes-for-vrm)、[カートゥーン髪のモデリング研究](https://otik.zcu.cz/handle/11025/1722?locale=en)、[80 Level "Dead Cells Character Art Pipeline"](https://80.lv/articles/case-study-dead-cells-character-art-pipeline/)、[Inigo Quilez "Distance functions"](https://iquilezles.org/articles/distfunctions)
 - 比率・ポーズ・人体構造：[Life Drawing Academy "Contrapposto"](https://lifedrawing.academy/drawing-lessons/contrapposto)、[Life Drawing Academy "Female Body in Contrapposto"](https://lifedrawing.academy/drawing-lessons/how-to-draw-female-body)、[Getty "Strike a Pose"](https://www.getty.edu/education/k-12-learning/strike-a-pose-exploring-contrapposto)、[UW CSE458 "Posing"](https://courses.cs.washington.edu/courses/cse458/20au/content/projects/project6_animation_a/index.html)、[PoseMy.Art](https://posemy.art/blog/how-to-draw-dynamic-poses-guide/)、[Fine Art Tutorials "Loomis Method"](https://finearttutorials.com/guide/loomis-method/)、[Proko "How to Draw the Head"](https://proko.com/course-lesson/how-to-draw-the-head-front-view/notes)、[CLIP STUDIO 公式講座（頭身）](https://www.clipstudio.net/oekaki/archives/151156)、[Anime Art Academy（頭身と年齢）](https://animeartacademy.artstation.com/projects/qeLrNN)、[MediBang Paint（男女の骨格）](https://medibangpaint.com/en/use/2021/03/differences-between-male-and-female-skeletons)
 - ファッショントレンド：[Korea JoongAng Daily "Y2K fashion"](https://www.koreajoongangdaily.com/opinion/talking-trends-y2k-fashion/11024699)、[FUGA Studios "Korean fashion trends"](https://fuga-studios.com/en/blogs/journal/korean-fashion-trends)、[fun-japan](https://www.fun-japan.jp/jp/articles/14417)
 
